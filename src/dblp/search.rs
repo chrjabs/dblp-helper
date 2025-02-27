@@ -1,6 +1,10 @@
 use std::fmt;
 
-use reqwest::{Response, Url};
+use reqwest::Url;
+
+mod response;
+
+pub use response::{Hit, Response};
 
 const PUBL_BASE_URL: &str = "https://dblp.org/search/publ/api";
 const AUTHOR_BASE_URL: &str = "https://dblp.org/search/author/api";
@@ -84,10 +88,13 @@ impl Query {
         if let Some(comp) = self.completions {
             url.query_pairs_mut().append_pair("c", &comp.to_string());
         }
-        dbg!(url)
+        url
     }
 
     pub async fn get(self) -> reqwest::Result<Response> {
-        reqwest::get(self.request_url()).await
+        reqwest::get(self.request_url())
+            .await?
+            .json::<Response>()
+            .await
     }
 }

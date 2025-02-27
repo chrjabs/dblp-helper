@@ -1,19 +1,13 @@
-use owo_colors::{OwoColorize, Style};
+use owo_colors::Style;
 
 #[derive(clap::Parser, Clone, Debug)]
 #[command(version, about, long_about = None)]
 pub struct Args {
-    /// The DBLP query
-    pub query: String,
-    /// The type of query to perform
-    #[arg(short, long, default_value_t = crate::dblp::query::Type::default())]
-    pub r#type: crate::dblp::query::Type,
-    /// The number of hits to request
-    #[arg(short = 'n', long)]
-    pub hits: Option<u32>,
     /// Whether to color the output
     #[clap(long, global = true, default_value = "auto")]
     pub color: Color,
+    #[command(subcommand)]
+    pub command: Commands,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug)]
@@ -51,6 +45,9 @@ pub struct Styles {
     pub year: Style,
     pub separator: Style,
     pub url: Style,
+    pub bibtex_type: Style,
+    pub bibtex_key: Style,
+    pub bibtex_val: Style,
 }
 
 impl Styles {
@@ -62,5 +59,34 @@ impl Styles {
         self.year = Style::new().blue();
         self.separator = Style::new().bold();
         self.url = Style::new().underline();
+        self.bibtex_type = Style::new().green().bold();
+        self.bibtex_key = Style::new().magenta();
+        self.bibtex_val = Style::new().blue();
     }
+}
+
+#[derive(clap::Subcommand, Debug, Clone)]
+pub enum Commands {
+    /// Search DBLP
+    Search(#[command(flatten)] SearchArgs),
+    /// Gets a bibtex entry from DBLP
+    Get(#[command(flatten)] GetArgs),
+}
+
+#[derive(clap::Args, Debug, Clone)]
+pub struct SearchArgs {
+    /// The DBLP query
+    pub query: String,
+    /// The type of query to perform
+    #[arg(short, long, default_value_t = crate::dblp::search::Type::default())]
+    pub r#type: crate::dblp::search::Type,
+    /// The number of hits to request
+    #[arg(short = 'n', long)]
+    pub hits: Option<u32>,
+}
+
+#[derive(clap::Args, Debug, Clone)]
+pub struct GetArgs {
+    /// The DBLP citekey
+    pub key: String,
 }

@@ -1,5 +1,4 @@
-pub mod query;
-pub mod response;
+pub mod record;
+pub mod search;
 
-pub use query::Query;
-pub use response::Response;
+pub use record::Record;
