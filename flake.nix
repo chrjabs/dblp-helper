@@ -22,7 +22,7 @@
     lib = nixpkgs.lib;
     pkgsFor = lib.genAttrs (import systems) (system: (import nixpkgs {
       inherit system;
-      overlays = [(import rust-overlay) nix-tools.overlays.default] ++ builtins.attrValues nix-config.overlays;
+      overlays = [(import rust-overlay)] ++ builtins.attrValues nix-config.overlays;
     }));
     forEachSystem = f: lib.genAttrs (import systems) (system: f pkgsFor.${system});
   in {
