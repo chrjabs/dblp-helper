@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use owo_colors::Style;
 
 #[derive(clap::Parser, Clone, Debug)]
@@ -71,6 +73,8 @@ pub enum Commands {
     Search(#[command(flatten)] SearchArgs),
     /// Gets a bibtex entry from DBLP
     Get(#[command(flatten)] GetArgs),
+    /// Fetches all DBLP bibtex entries for a LaTeX file
+    GetAll(#[command(flatten)] GetAllArgs),
 }
 
 #[derive(clap::Args, Debug, Clone)]
@@ -86,7 +90,27 @@ pub struct SearchArgs {
 }
 
 #[derive(clap::Args, Debug, Clone)]
+pub struct CommonGetArgs {
+    /// Include unicode characters, rather than converting them to TeX
+    #[arg(short, long)]
+    pub unicode: bool,
+}
+
+#[derive(clap::Args, Debug, Clone)]
 pub struct GetArgs {
     /// The DBLP citekey
     pub key: String,
+    #[command(flatten)]
+    pub common: CommonGetArgs,
+}
+
+#[derive(clap::Args, Debug, Clone)]
+pub struct GetAllArgs {
+    /// The LaTeX file to get all DBLP bibtex entries for
+    ///
+    /// The tool will read the `.aux` file. Assuming your main file is called `main.tex`, this can
+    /// point to `main.tex`, `main.aux` or `main`.
+    pub path: PathBuf,
+    #[command(flatten)]
+    pub common: CommonGetArgs,
 }

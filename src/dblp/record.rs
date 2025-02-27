@@ -20,7 +20,7 @@ pub enum Record {
         key: String,
         author: Vec<String>,
         title: String,
-        pages: (String, String),
+        pages: Option<String>,
         year: u32,
         volume: u32,
         journal: String,
@@ -43,7 +43,7 @@ pub enum Record {
         title: String,
         editor: Vec<String>,
         booktitle: String,
-        pages: (String, String),
+        pages: Option<String>,
         year: u32,
         volume: u32,
         series: String,
@@ -68,7 +68,7 @@ pub enum Record {
         title: String,
         editor: Vec<String>,
         booktitle: String,
-        pages: (String, String),
+        pages: Option<String>,
         year: u32,
         volume: u32,
         series: String,
@@ -77,17 +77,14 @@ pub enum Record {
     },
 }
 
-fn parse_pages(mut pages: String) -> (String, String) {
-    let sep = pages.find('-').expect("pages should be a range");
-    let till = pages.split_off(sep + 1);
-    pages.pop();
-    (pages, till)
-}
-
 impl Record {
     pub async fn get(key: &str) -> Result<Self, Error> {
-        let key = key.strip_prefix("DBLP:").unwrap_or(key);
         let client = reqwest::Client::new();
+        Self::get_with_client(key, client).await
+    }
+
+    pub async fn get_with_client(key: &str, client: reqwest::Client) -> Result<Self, Error> {
+        let key = key.strip_prefix("DBLP:").unwrap_or(key);
         let response = client
             .get(format!("{}{}.xml", BASE_URL, key))
             .send()
@@ -105,7 +102,7 @@ impl Record {
                 key: key.to_string(),
                 author,
                 title,
-                pages: parse_pages(pages),
+                pages,
                 year,
                 volume,
                 journal,
@@ -116,9 +113,9 @@ impl Record {
                 title,
                 pages,
                 year,
-                booktitle,
                 ee,
                 crossref,
+                ..
             } => {
                 let response = client
                     .get(format!("{}{}.xml", BASE_URL, crossref))
@@ -141,7 +138,7 @@ impl Record {
                     title,
                     editor,
                     booktitle,
-                    pages: parse_pages(pages),
+                    pages,
                     year,
                     volume,
                     series,
@@ -154,9 +151,9 @@ impl Record {
                 title,
                 pages,
                 year,
-                booktitle,
                 ee,
                 crossref,
+                ..
             } => {
                 let response = client
                     .get(format!("{}{}", BASE_URL, crossref))
@@ -179,7 +176,7 @@ impl Record {
                     title,
                     editor,
                     booktitle,
-                    pages: parse_pages(pages),
+                    pages,
                     year,
                     volume,
                     series,
@@ -308,22 +305,6 @@ fn bibtex_people(
     }
 }
 
-fn bibtex_pages(
-    f: &mut fmt::Formatter<'_>,
-    pages: &(String, String),
-    comma: bool,
-    styles: &Styles,
-) -> fmt::Result {
-    writeln!(
-        f,
-        "  {key: <12} = {{{from}--{till}}}{comma}",
-        key = "pages".style(styles.bibtex_key),
-        from = pages.0.style(styles.bibtex_val),
-        till = pages.1.style(styles.bibtex_val),
-        comma = if comma { "," } else { "" }
-    )
-}
-
 fn bibtex_kv<V: fmt::Display>(
     f: &mut fmt::Formatter<'_>,
     key: &str,
@@ -357,10 +338,12 @@ impl fmt::Display for Bibtex<'_> {
                 journal,
                 external,
             } => {
-                bibtex_start(f, "article", &key, &self.styles)?;
+                bibtex_start(f, "article", key, &self.styles)?;
                 bibtex_people(f, "author", author, true, &self.styles)?;
                 bibtex_kv(f, "title", title, true, &self.styles)?;
-                bibtex_pages(f, pages, true, &self.styles)?;
+                if let Some(pages) = pages {
+                    bibtex_kv(f, "pages", pages, true, &self.styles)?;
+                }
                 bibtex_kv(f, "year", year, true, &self.styles)?;
                 bibtex_kv(f, "volume", volume, true, &self.styles)?;
                 bibtex_kv(f, "journal", journal, true, &self.styles)?;
@@ -385,7 +368,7 @@ impl fmt::Display for Bibtex<'_> {
                 external,
                 isbn,
             } => {
-                bibtex_start(f, "proceedings", &key, &self.styles)?;
+                bibtex_start(f, "proceedings", key, &self.styles)?;
                 bibtex_people(f, "editor", editor, true, &self.styles)?;
                 bibtex_kv(f, "title", title, true, &self.styles)?;
                 bibtex_kv(f, "year", year, true, &self.styles)?;
@@ -418,12 +401,14 @@ impl fmt::Display for Bibtex<'_> {
                 publisher,
                 external,
             } => {
-                bibtex_start(f, "inproceedings", &key, &self.styles)?;
+                bibtex_start(f, "inproceedings", key, &self.styles)?;
                 bibtex_people(f, "author", author, true, &self.styles)?;
                 bibtex_kv(f, "title", title, true, &self.styles)?;
                 bibtex_people(f, "editor", editor, true, &self.styles)?;
                 bibtex_kv(f, "booktitle", booktitle, true, &self.styles)?;
-                bibtex_pages(f, pages, true, &self.styles)?;
+                if let Some(pages) = pages {
+                    bibtex_kv(f, "pages", pages, true, &self.styles)?;
+                }
                 bibtex_kv(f, "year", year, true, &self.styles)?;
                 bibtex_kv(f, "volume", volume, true, &self.styles)?;
                 bibtex_kv(f, "series", series, true, &self.styles)?;
@@ -450,7 +435,7 @@ impl fmt::Display for Bibtex<'_> {
                 external,
                 isbn,
             } => {
-                bibtex_start(f, "book", &key, &self.styles)?;
+                bibtex_start(f, "book", key, &self.styles)?;
                 bibtex_people(f, "author", author, true, &self.styles)?;
                 bibtex_people(f, "editor", editor, true, &self.styles)?;
                 bibtex_kv(f, "title", title, true, &self.styles)?;
@@ -484,12 +469,14 @@ impl fmt::Display for Bibtex<'_> {
                 publisher,
                 external,
             } => {
-                bibtex_start(f, "incollection", &key, &self.styles)?;
+                bibtex_start(f, "incollection", key, &self.styles)?;
                 bibtex_people(f, "author", author, true, &self.styles)?;
                 bibtex_kv(f, "title", title, true, &self.styles)?;
                 bibtex_people(f, "editor", editor, true, &self.styles)?;
                 bibtex_kv(f, "booktitle", booktitle, true, &self.styles)?;
-                bibtex_pages(f, pages, true, &self.styles)?;
+                if let Some(pages) = pages {
+                    bibtex_kv(f, "pages", pages, true, &self.styles)?;
+                }
                 bibtex_kv(f, "year", year, true, &self.styles)?;
                 bibtex_kv(f, "series", series, true, &self.styles)?;
                 bibtex_kv(f, "volume", volume, true, &self.styles)?;
@@ -520,7 +507,7 @@ enum Data {
     Article {
         author: Vec<String>,
         title: String,
-        pages: String,
+        pages: Option<String>,
         year: u32,
         volume: u32,
         journal: String,
@@ -529,7 +516,7 @@ enum Data {
     Inproceedings {
         author: Vec<String>,
         title: String,
-        pages: String,
+        pages: Option<String>,
         year: u32,
         booktitle: String,
         ee: String,
@@ -538,7 +525,7 @@ enum Data {
     Incollection {
         author: Vec<String>,
         title: String,
-        pages: String,
+        pages: Option<String>,
         year: u32,
         booktitle: String,
         ee: String,
@@ -551,6 +538,7 @@ enum Data {
         year: u32,
         series: String,
         volume: u32,
+        #[serde(default)]
         isbn: Vec<String>,
         ee: String,
     },
@@ -564,6 +552,7 @@ enum Data {
         year: u32,
         series: String,
         volume: u32,
+        #[serde(default)]
         isbn: Vec<String>,
         ee: String,
     },
