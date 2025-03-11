@@ -2,7 +2,7 @@ use std::{fs, io};
 
 use clap::Parser;
 use cli::{Color, CommonGetArgs, GetAllArgs, GetArgs, SearchArgs};
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{bail, Result};
 
 mod cli;
 mod dblp;
@@ -46,6 +46,8 @@ async fn search(args: SearchArgs, color: Color) -> Result<()> {
 fn fixup(rec: &mut dblp::Record, args: &CommonGetArgs) {
     fixers::author_num(rec);
     fixers::page_range(rec);
+    fixers::names(rec);
+    fixers::acronyms(rec);
     if !args.unicode {
         fixers::unicode(rec);
     }
@@ -71,11 +73,21 @@ async fn get_all(mut args: GetAllArgs, color: Color) -> Result<()> {
     keys.dedup();
     let client = reqwest::Client::new();
     let n_keys = keys.len();
+    let mut unknown_keys = vec![];
     for (idx, key) in keys.into_iter().enumerate() {
         if !key.starts_with("DBLP:") {
             continue;
         }
-        let mut rec = dblp::Record::get_with_client(&key, client.clone()).await?;
+        let mut rec = match dblp::Record::get_with_client(&key, client.clone()).await {
+            Ok(rec) => rec,
+            Err(err) => match err {
+                dblp::record::Error::UnknownKey(key) => {
+                    unknown_keys.push(key);
+                    continue;
+                }
+                err => return Err(err.into()),
+            },
+        };
         fixup(&mut rec, &args.common);
         let mut bibtex = rec.bibtex();
         if color.should_color(&std::io::stdout()) {
@@ -85,6 +97,9 @@ async fn get_all(mut args: GetAllArgs, color: Color) -> Result<()> {
         if idx + 1 < n_keys {
             println!();
         }
+    }
+    if !unknown_keys.is_empty() {
+        bail!("unknown DBLP keys: {unknown_keys:?}");
     }
     Ok(())
 }

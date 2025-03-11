@@ -12,6 +12,10 @@ pub enum Error {
     Reqwest(#[from] reqwest::Error),
     #[error("{0}")]
     Xml(#[from] quick_xml::de::DeError),
+    #[error("HTTP status code: {0}")]
+    Http(reqwest::StatusCode),
+    #[error("DBLP key `{0}` is unknown")]
+    UnknownKey(String),
 }
 
 #[derive(Clone, Debug)]
@@ -20,21 +24,21 @@ pub enum Record {
         key: String,
         author: Vec<String>,
         title: String,
-        pages: Option<String>,
-        year: u32,
-        volume: u32,
         journal: String,
-        external: External,
+        year: u32,
+        pages: Option<String>,
+        volume: Option<String>,
+        external: Vec<External>,
     },
     Proceedings {
         key: String,
         editor: Vec<String>,
         title: String,
-        series: String,
-        volume: u32,
-        publisher: String,
         year: u32,
-        external: External,
+        series: Option<String>,
+        volume: Option<String>,
+        publisher: Option<String>,
+        external: Vec<External>,
         isbn: Vec<String>,
     },
     Inproceedings {
@@ -43,37 +47,37 @@ pub enum Record {
         title: String,
         editor: Vec<String>,
         booktitle: String,
-        pages: Option<String>,
         year: u32,
-        volume: u32,
-        series: String,
-        publisher: String,
-        external: External,
+        pages: Option<String>,
+        series: Option<String>,
+        volume: Option<String>,
+        publisher: Option<String>,
+        external: Vec<External>,
     },
     Book {
         key: String,
         author: Vec<String>,
         editor: Vec<String>,
         title: String,
-        year: u32,
-        volume: u32,
-        series: String,
         publisher: String,
-        external: External,
+        year: u32,
+        series: Option<String>,
+        volume: Option<String>,
+        external: Vec<External>,
         isbn: Vec<String>,
     },
     Incollection {
         key: String,
         author: Vec<String>,
         title: String,
-        editor: Vec<String>,
         booktitle: String,
-        pages: Option<String>,
-        year: u32,
-        volume: u32,
-        series: String,
+        editor: Vec<String>,
         publisher: String,
-        external: External,
+        year: u32,
+        pages: Option<String>,
+        series: Option<String>,
+        volume: Option<String>,
+        external: Vec<External>,
     },
 }
 
@@ -89,6 +93,11 @@ impl Record {
             .get(format!("{}{}.xml", BASE_URL, key))
             .send()
             .await?;
+        match response.status() {
+            reqwest::StatusCode::NOT_FOUND => return Err(Error::UnknownKey(String::from(key))),
+            code if !code.is_success() => return Err(Error::Http(code)),
+            _ => {}
+        }
         let rec = match quick_xml::de::from_str::<XmlRecord>(&response.text().await?)?.value {
             Data::Article {
                 author,
@@ -106,7 +115,7 @@ impl Record {
                 year,
                 volume,
                 journal,
-                external: External::from(ee),
+                external: ee.into_iter().map(External::from).collect(),
             },
             Data::Inproceedings {
                 author,
@@ -121,6 +130,13 @@ impl Record {
                     .get(format!("{}{}.xml", BASE_URL, crossref))
                     .send()
                     .await?;
+                match response.status() {
+                    reqwest::StatusCode::NOT_FOUND => {
+                        panic!("this really shouldn't happen, or DBLP's data is buggy")
+                    }
+                    code if !code.is_success() => return Err(Error::Http(code)),
+                    _ => {}
+                }
                 let Data::Proceedings {
                     editor,
                     title: booktitle,
@@ -143,7 +159,7 @@ impl Record {
                     volume,
                     series,
                     publisher,
-                    external: External::from(ee),
+                    external: ee.into_iter().map(External::from).collect(),
                 }
             }
             Data::Incollection {
@@ -156,9 +172,16 @@ impl Record {
                 ..
             } => {
                 let response = client
-                    .get(format!("{}{}", BASE_URL, crossref))
+                    .get(format!("{}{}.xml", BASE_URL, crossref))
                     .send()
                     .await?;
+                match response.status() {
+                    reqwest::StatusCode::NOT_FOUND => {
+                        panic!("this really shouldn't happen, or DBLP's data is buggy")
+                    }
+                    code if !code.is_success() => return Err(Error::Http(code)),
+                    _ => {}
+                }
                 let Data::Book {
                     editor,
                     title: booktitle,
@@ -181,7 +204,7 @@ impl Record {
                     volume,
                     series,
                     publisher,
-                    external: External::from(ee),
+                    external: ee.into_iter().map(External::from).collect(),
                 }
             }
             Data::Proceedings {
@@ -202,7 +225,7 @@ impl Record {
                 series,
                 volume,
                 isbn,
-                external: External::from(ee),
+                external: ee.into_iter().map(External::from).collect(),
             },
             Data::Book {
                 author,
@@ -224,7 +247,7 @@ impl Record {
                 series,
                 volume,
                 isbn,
-                external: External::from(ee),
+                external: ee.into_iter().map(External::from).collect(),
             },
         };
         Ok(rec)
@@ -341,18 +364,22 @@ impl fmt::Display for Bibtex<'_> {
                 bibtex_start(f, "article", key, &self.styles)?;
                 bibtex_people(f, "author", author, true, &self.styles)?;
                 bibtex_kv(f, "title", title, true, &self.styles)?;
+                bibtex_kv(f, "journal", journal, true, &self.styles)?;
+                bibtex_kv(f, "year", year, true, &self.styles)?;
                 if let Some(pages) = pages {
                     bibtex_kv(f, "pages", pages, true, &self.styles)?;
                 }
-                bibtex_kv(f, "year", year, true, &self.styles)?;
-                bibtex_kv(f, "volume", volume, true, &self.styles)?;
-                bibtex_kv(f, "journal", journal, true, &self.styles)?;
-                match external {
-                    External::Url(url) => {
-                        bibtex_kv(f, "url", url, false, &self.styles)?;
-                    }
-                    External::Doi(doi) => {
-                        bibtex_kv(f, "doi", doi, false, &self.styles)?;
+                if let Some(volume) = volume {
+                    bibtex_kv(f, "volume", volume, true, &self.styles)?;
+                }
+                for external in external {
+                    match external {
+                        External::Url(url) => {
+                            bibtex_kv(f, "url", url, false, &self.styles)?;
+                        }
+                        External::Doi(doi) => {
+                            bibtex_kv(f, "doi", doi, false, &self.styles)?;
+                        }
                     }
                 }
                 bibtex_end(f)
@@ -372,18 +399,26 @@ impl fmt::Display for Bibtex<'_> {
                 bibtex_people(f, "editor", editor, true, &self.styles)?;
                 bibtex_kv(f, "title", title, true, &self.styles)?;
                 bibtex_kv(f, "year", year, true, &self.styles)?;
-                bibtex_kv(f, "series", series, true, &self.styles)?;
-                bibtex_kv(f, "volume", volume, true, &self.styles)?;
-                bibtex_kv(f, "publisher", publisher, true, &self.styles)?;
+                if let Some(series) = series {
+                    bibtex_kv(f, "series", series, true, &self.styles)?;
+                }
+                if let Some(volume) = volume {
+                    bibtex_kv(f, "volume", volume, true, &self.styles)?;
+                }
+                if let Some(publisher) = publisher {
+                    bibtex_kv(f, "publisher", publisher, true, &self.styles)?;
+                }
                 for isbn in isbn {
                     bibtex_kv(f, "isbn", isbn, true, &self.styles)?;
                 }
-                match external {
-                    External::Url(url) => {
-                        bibtex_kv(f, "url", url, false, &self.styles)?;
-                    }
-                    External::Doi(doi) => {
-                        bibtex_kv(f, "doi", doi, false, &self.styles)?;
+                for external in external {
+                    match external {
+                        External::Url(url) => {
+                            bibtex_kv(f, "url", url, false, &self.styles)?;
+                        }
+                        External::Doi(doi) => {
+                            bibtex_kv(f, "doi", doi, false, &self.styles)?;
+                        }
                     }
                 }
                 bibtex_end(f)
@@ -406,19 +441,27 @@ impl fmt::Display for Bibtex<'_> {
                 bibtex_kv(f, "title", title, true, &self.styles)?;
                 bibtex_people(f, "editor", editor, true, &self.styles)?;
                 bibtex_kv(f, "booktitle", booktitle, true, &self.styles)?;
+                bibtex_kv(f, "year", year, true, &self.styles)?;
                 if let Some(pages) = pages {
                     bibtex_kv(f, "pages", pages, true, &self.styles)?;
                 }
-                bibtex_kv(f, "year", year, true, &self.styles)?;
-                bibtex_kv(f, "volume", volume, true, &self.styles)?;
-                bibtex_kv(f, "series", series, true, &self.styles)?;
-                bibtex_kv(f, "publisher", publisher, true, &self.styles)?;
-                match external {
-                    External::Url(url) => {
-                        bibtex_kv(f, "url", url, false, &self.styles)?;
-                    }
-                    External::Doi(doi) => {
-                        bibtex_kv(f, "doi", doi, false, &self.styles)?;
+                if let Some(series) = series {
+                    bibtex_kv(f, "series", series, true, &self.styles)?;
+                }
+                if let Some(volume) = volume {
+                    bibtex_kv(f, "volume", volume, true, &self.styles)?;
+                }
+                if let Some(publisher) = publisher {
+                    bibtex_kv(f, "publisher", publisher, true, &self.styles)?;
+                }
+                for external in external {
+                    match external {
+                        External::Url(url) => {
+                            bibtex_kv(f, "url", url, false, &self.styles)?;
+                        }
+                        External::Doi(doi) => {
+                            bibtex_kv(f, "doi", doi, false, &self.styles)?;
+                        }
                     }
                 }
                 bibtex_end(f)
@@ -439,19 +482,25 @@ impl fmt::Display for Bibtex<'_> {
                 bibtex_people(f, "author", author, true, &self.styles)?;
                 bibtex_people(f, "editor", editor, true, &self.styles)?;
                 bibtex_kv(f, "title", title, true, &self.styles)?;
-                bibtex_kv(f, "year", year, true, &self.styles)?;
-                bibtex_kv(f, "series", series, true, &self.styles)?;
-                bibtex_kv(f, "volume", volume, true, &self.styles)?;
                 bibtex_kv(f, "publisher", publisher, true, &self.styles)?;
+                bibtex_kv(f, "year", year, true, &self.styles)?;
+                if let Some(series) = series {
+                    bibtex_kv(f, "series", series, true, &self.styles)?;
+                }
+                if let Some(volume) = volume {
+                    bibtex_kv(f, "volume", volume, true, &self.styles)?;
+                }
                 for isbn in isbn {
                     bibtex_kv(f, "isbn", isbn, true, &self.styles)?;
                 }
-                match external {
-                    External::Url(url) => {
-                        bibtex_kv(f, "url", url, false, &self.styles)?;
-                    }
-                    External::Doi(doi) => {
-                        bibtex_kv(f, "doi", doi, false, &self.styles)?;
+                for external in external {
+                    match external {
+                        External::Url(url) => {
+                            bibtex_kv(f, "url", url, false, &self.styles)?;
+                        }
+                        External::Doi(doi) => {
+                            bibtex_kv(f, "doi", doi, false, &self.styles)?;
+                        }
                     }
                 }
                 bibtex_end(f)
@@ -472,21 +521,27 @@ impl fmt::Display for Bibtex<'_> {
                 bibtex_start(f, "incollection", key, &self.styles)?;
                 bibtex_people(f, "author", author, true, &self.styles)?;
                 bibtex_kv(f, "title", title, true, &self.styles)?;
-                bibtex_people(f, "editor", editor, true, &self.styles)?;
                 bibtex_kv(f, "booktitle", booktitle, true, &self.styles)?;
+                bibtex_people(f, "editor", editor, true, &self.styles)?;
+                bibtex_kv(f, "publisher", publisher, true, &self.styles)?;
+                bibtex_kv(f, "year", year, true, &self.styles)?;
                 if let Some(pages) = pages {
                     bibtex_kv(f, "pages", pages, true, &self.styles)?;
                 }
-                bibtex_kv(f, "year", year, true, &self.styles)?;
-                bibtex_kv(f, "series", series, true, &self.styles)?;
-                bibtex_kv(f, "volume", volume, true, &self.styles)?;
-                bibtex_kv(f, "publisher", publisher, true, &self.styles)?;
-                match external {
-                    External::Url(url) => {
-                        bibtex_kv(f, "url", url, false, &self.styles)?;
-                    }
-                    External::Doi(doi) => {
-                        bibtex_kv(f, "doi", doi, false, &self.styles)?;
+                if let Some(series) = series {
+                    bibtex_kv(f, "series", series, true, &self.styles)?;
+                }
+                if let Some(volume) = volume {
+                    bibtex_kv(f, "volume", volume, true, &self.styles)?;
+                }
+                for external in external {
+                    match external {
+                        External::Url(url) => {
+                            bibtex_kv(f, "url", url, false, &self.styles)?;
+                        }
+                        External::Doi(doi) => {
+                            bibtex_kv(f, "doi", doi, false, &self.styles)?;
+                        }
                     }
                 }
                 bibtex_end(f)
@@ -507,11 +562,12 @@ enum Data {
     Article {
         author: Vec<String>,
         title: String,
-        pages: Option<String>,
-        year: u32,
-        volume: u32,
         journal: String,
-        ee: String,
+        year: u32,
+        pages: Option<String>,
+        volume: Option<String>,
+        #[serde(default)]
+        ee: Vec<String>,
     },
     Inproceedings {
         author: Vec<String>,
@@ -519,28 +575,30 @@ enum Data {
         pages: Option<String>,
         year: u32,
         booktitle: String,
-        ee: String,
+        #[serde(default)]
+        ee: Vec<String>,
         crossref: String,
     },
     Incollection {
         author: Vec<String>,
         title: String,
-        pages: Option<String>,
         year: u32,
         booktitle: String,
-        ee: String,
+        pages: Option<String>,
+        ee: Option<String>,
         crossref: String,
     },
     Proceedings {
         editor: Vec<String>,
         title: String,
-        publisher: String,
         year: u32,
-        series: String,
-        volume: u32,
+        series: Option<String>,
+        volume: Option<String>,
+        publisher: Option<String>,
         #[serde(default)]
         isbn: Vec<String>,
-        ee: String,
+        #[serde(default)]
+        ee: Vec<String>,
     },
     Book {
         #[serde(default)]
@@ -550,11 +608,12 @@ enum Data {
         title: String,
         publisher: String,
         year: u32,
-        series: String,
-        volume: u32,
+        series: Option<String>,
+        volume: Option<String>,
         #[serde(default)]
         isbn: Vec<String>,
-        ee: String,
+        #[serde(default)]
+        ee: Vec<String>,
     },
 }
 
