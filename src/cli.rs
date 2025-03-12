@@ -89,7 +89,7 @@ pub struct SearchArgs {
     pub hits: Option<u32>,
 }
 
-#[derive(clap::Args, Debug, Clone)]
+#[derive(clap::Args, Debug, Clone, Copy)]
 pub struct CommonGetArgs {
     /// Include unicode characters, rather than converting them to TeX
     #[arg(short, long)]
@@ -113,4 +113,7 @@ pub struct GetAllArgs {
     pub path: PathBuf,
     #[command(flatten)]
     pub common: CommonGetArgs,
+    /// The maximum number of concurrent requests to DBLP to open
+    #[arg(short = 'j', long, default_value_t = 8)]
+    pub concurrent_requests: usize,
 }

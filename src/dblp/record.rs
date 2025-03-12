@@ -84,10 +84,10 @@ pub enum Record {
 impl Record {
     pub async fn get(key: &str) -> Result<Self, Error> {
         let client = reqwest::Client::new();
-        Self::get_with_client(key, client).await
+        Self::get_with_client(key, &client).await
     }
 
-    pub async fn get_with_client(key: &str, client: reqwest::Client) -> Result<Self, Error> {
+    pub async fn get_with_client(key: &str, client: &reqwest::Client) -> Result<Self, Error> {
         let key = key.strip_prefix("DBLP:").unwrap_or(key);
         let response = client
             .get(format!("{}{}.xml", BASE_URL, key))

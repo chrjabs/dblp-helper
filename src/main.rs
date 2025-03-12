@@ -3,6 +3,7 @@ use std::{fs, io};
 use clap::Parser;
 use cli::{Color, CommonGetArgs, GetAllArgs, GetArgs, SearchArgs};
 use color_eyre::eyre::{bail, Result};
+use futures::{stream, StreamExt, TryStreamExt};
 
 mod cli;
 mod dblp;
@@ -64,6 +65,27 @@ async fn get(args: GetArgs, color: Color) -> Result<()> {
     Ok(())
 }
 
+enum FetchRes {
+    Rec(dblp::Record),
+    Unknown(String),
+}
+
+async fn fetch_record(
+    key: &str,
+    client: &reqwest::Client,
+    opts: &cli::CommonGetArgs,
+) -> Result<FetchRes, dblp::record::Error> {
+    let mut rec = match dblp::Record::get_with_client(key, client).await {
+        Ok(rec) => rec,
+        Err(err) => match err {
+            dblp::record::Error::UnknownKey(key) => return Ok(FetchRes::Unknown(key)),
+            err => return Err(err),
+        },
+    };
+    fixup(&mut rec, opts);
+    Ok(FetchRes::Rec(rec))
+}
+
 async fn get_all(mut args: GetAllArgs, color: Color) -> Result<()> {
     args.path.set_extension("aux");
     let keys: Result<Vec<_>, _> =
@@ -71,35 +93,43 @@ async fn get_all(mut args: GetAllArgs, color: Color) -> Result<()> {
     let mut keys = keys?;
     keys.sort_unstable();
     keys.dedup();
+
     let client = reqwest::Client::new();
-    let n_keys = keys.len();
-    let mut unknown_keys = vec![];
-    for (idx, key) in keys.into_iter().enumerate() {
-        if !key.starts_with("DBLP:") {
-            continue;
-        }
-        let mut rec = match dblp::Record::get_with_client(&key, client.clone()).await {
-            Ok(rec) => rec,
-            Err(err) => match err {
-                dblp::record::Error::UnknownKey(key) => {
-                    unknown_keys.push(key);
-                    continue;
+
+    let results: Vec<_> = stream::iter(keys.into_iter().filter(|key| key.starts_with("DBLP:")))
+        .map(|key| {
+            let client = &client;
+            async move { fetch_record(&key, client, &args.common).await }
+        })
+        .buffered(args.concurrent_requests)
+        .try_collect()
+        .await?;
+
+    let mut unknown_keys = String::new();
+    let mut printed = false;
+
+    for res in results {
+        match res {
+            FetchRes::Rec(rec) => {
+                if printed {
+                    println!();
                 }
-                err => return Err(err.into()),
-            },
-        };
-        fixup(&mut rec, &args.common);
-        let mut bibtex = rec.bibtex();
-        if color.should_color(&std::io::stdout()) {
-            bibtex.colorize();
-        }
-        println!("{bibtex}");
-        if idx + 1 < n_keys {
-            println!();
+                let mut bibtex = rec.bibtex();
+                if color.should_color(&std::io::stdout()) {
+                    bibtex.colorize();
+                }
+                println!("{bibtex}");
+                printed = true;
+            }
+            FetchRes::Unknown(key) => {
+                unknown_keys.push_str("\n- ");
+                unknown_keys.push_str(&key);
+            }
         }
     }
+
     if !unknown_keys.is_empty() {
-        bail!("unknown DBLP keys: {unknown_keys:?}");
+        bail!("unknown DBLP keys:{unknown_keys}");
     }
     Ok(())
 }
