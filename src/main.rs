@@ -4,6 +4,7 @@ use clap::Parser;
 use cli::{Color, CommonGetArgs, GetAllArgs, GetArgs, SearchArgs};
 use color_eyre::eyre::{bail, Result};
 use futures::{stream, StreamExt, TryStreamExt};
+use owo_colors::OwoColorize;
 
 mod cli;
 mod dblp;
@@ -89,17 +90,45 @@ async fn fetch_record(
 async fn get_all(mut args: GetAllArgs, color: Color) -> Result<()> {
     args.path.set_extension("aux");
     let keys: Result<Vec<_>, _> =
-        latex::CiteKeyIter::new(io::BufReader::new(fs::File::open(args.path)?)).collect();
+        latex::CiteKeyIter::new(io::BufReader::new(fs::File::open(args.path)?))
+            .filter(|res| res.as_ref().is_ok_and(|key| key.starts_with("DBLP:")))
+            .collect();
     let mut keys = keys?;
     keys.sort_unstable();
     keys.dedup();
 
     let client = reqwest::Client::new();
 
-    let results: Vec<_> = stream::iter(keys.into_iter().filter(|key| key.starts_with("DBLP:")))
+    // Setup progress information
+    let err_styles = {
+        let mut styles = cli::Styles::default();
+        if color.should_color(&std::io::stderr()) {
+            styles.colorize();
+        }
+        styles
+    };
+    eprintln!("{}", "fetching DBLP records".style(err_styles.info));
+    let bar = if color.should_color(&std::io::stderr()) {
+        let bar = indicatif::ProgressBar::new(u64::try_from(keys.len())?);
+        bar.set_style(indicatif::ProgressStyle::with_template(
+            cli::Styles::GET_ALL_PROGRESS_TEMPLATE,
+        )?);
+        Some(bar)
+    } else {
+        None
+    };
+
+    let results: Vec<_> = stream::iter(keys)
         .map(|key| {
             let client = &client;
-            async move { fetch_record(&key, client, &args.common).await }
+            if let Some(bar) = &bar {
+                bar.set_message(key.clone());
+            }
+            let res = async move { fetch_record(&key, client, &args.common).await };
+            if let Some(bar) = &bar {
+                bar.inc(1);
+            }
+            res
         })
         .buffered(args.concurrent_requests)
         .try_collect()

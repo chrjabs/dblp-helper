@@ -50,9 +50,13 @@ pub struct Styles {
     pub bibtex_type: Style,
     pub bibtex_key: Style,
     pub bibtex_val: Style,
+    pub info: Style,
 }
 
 impl Styles {
+    pub const GET_ALL_PROGRESS_TEMPLATE: &'static str =
+        "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}";
+
     pub fn colorize(&mut self) {
         self.citekey = Style::new().cyan();
         self.title = Style::new().italic();
@@ -64,6 +68,7 @@ impl Styles {
         self.bibtex_type = Style::new().green().bold();
         self.bibtex_key = Style::new().magenta();
         self.bibtex_val = Style::new().blue();
+        self.info = Style::new().cyan().bold();
     }
 }
 
