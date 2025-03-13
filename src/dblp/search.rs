@@ -4,11 +4,11 @@ use reqwest::Url;
 
 mod response;
 
-pub use response::{Hit, Response};
+pub use response::Response;
 
-const PUBL_BASE_URL: &str = "https://dblp.org/search/publ/api";
-const AUTHOR_BASE_URL: &str = "https://dblp.org/search/author/api";
-const VENUE_BASE_URL: &str = "https://dblp.org/search/author/api";
+const PUBL_BASE: &str = "/search/publ/api";
+const AUTHOR_BASE: &str = "/search/author/api";
+const VENUE_BASE: &str = "/search/author/api";
 
 #[derive(Clone, Copy, Debug, Default, clap::ValueEnum)]
 pub enum Type {
@@ -31,9 +31,9 @@ impl fmt::Display for Type {
 impl Type {
     fn base_url(self) -> &'static str {
         match self {
-            Type::Publication => PUBL_BASE_URL,
-            Type::Author => AUTHOR_BASE_URL,
-            Type::Venue => VENUE_BASE_URL,
+            Type::Publication => PUBL_BASE,
+            Type::Author => AUTHOR_BASE,
+            Type::Venue => VENUE_BASE,
         }
     }
 }
@@ -73,9 +73,9 @@ impl Query {
         self
     }
 
-    pub fn request_url(self) -> Url {
+    pub fn request_url(self, opts: &crate::cli::DblpServerArgs) -> Url {
         let mut url = Url::parse_with_params(
-            self.qtype.base_url(),
+            &format!("{}{}", super::domain(opts), self.qtype.base_url()),
             [("q", self.query.as_str()), ("format", "json")],
         )
         .expect("base url must be valid");
@@ -91,8 +91,8 @@ impl Query {
         url
     }
 
-    pub async fn get(self) -> reqwest::Result<Response> {
-        reqwest::get(self.request_url())
+    pub async fn get(self, opts: &crate::cli::DblpServerArgs) -> reqwest::Result<Response> {
+        reqwest::get(self.request_url(opts))
             .await?
             .json::<Response>()
             .await

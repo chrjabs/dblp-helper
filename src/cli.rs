@@ -6,10 +6,24 @@ use owo_colors::Style;
 #[command(version, about, long_about = None)]
 pub struct Args {
     /// Whether to color the output
-    #[clap(long, global = true, default_value = "auto")]
+    #[arg(long, global = true, default_value = "auto")]
     pub color: Color,
     #[command(subcommand)]
     pub command: Commands,
+    #[command(flatten)]
+    pub dblp: DblpServerArgs,
+}
+
+/// Arguments related to the DBLP server to use
+#[derive(clap::Args, Clone, Debug)]
+#[command(next_help_heading = "DBLP server args")]
+pub struct DblpServerArgs {
+    /// Use the server at `dblp.uni-trier.de`, rather than `dblp.org`
+    #[arg(short, long, global = true)]
+    pub trier: bool,
+    /// Use a custom DBLP server
+    #[arg(long, global = true, conflicts_with = "trier")]
+    pub dblp_domain: Option<String>,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug)]

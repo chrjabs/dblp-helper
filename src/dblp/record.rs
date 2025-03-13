@@ -4,7 +4,11 @@ use owo_colors::OwoColorize;
 
 use crate::cli::Styles;
 
-const BASE_URL: &str = "https://dblp.org/rec/";
+const BASE: &str = "/rec/";
+
+fn query_url(key: &str, opts: &crate::cli::DblpServerArgs) -> String {
+    format!("{}{}{}.xml", super::domain(opts), BASE, key)
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -82,17 +86,18 @@ pub enum Record {
 }
 
 impl Record {
-    pub async fn get(key: &str) -> Result<Self, Error> {
+    pub async fn get(key: &str, opts: &crate::cli::DblpServerArgs) -> Result<Self, Error> {
         let client = reqwest::Client::new();
-        Self::get_with_client(key, &client).await
+        Self::get_with_client(key, opts, &client).await
     }
 
-    pub async fn get_with_client(key: &str, client: &reqwest::Client) -> Result<Self, Error> {
+    pub async fn get_with_client(
+        key: &str,
+        opts: &crate::cli::DblpServerArgs,
+        client: &reqwest::Client,
+    ) -> Result<Self, Error> {
         let key = key.strip_prefix("DBLP:").unwrap_or(key);
-        let response = client
-            .get(format!("{}{}.xml", BASE_URL, key))
-            .send()
-            .await?;
+        let response = client.get(query_url(key, opts)).send().await?;
         match response.status() {
             reqwest::StatusCode::NOT_FOUND => return Err(Error::UnknownKey(String::from(key))),
             code if !code.is_success() => return Err(Error::Http(code)),
@@ -126,10 +131,7 @@ impl Record {
                 crossref,
                 ..
             } => {
-                let response = client
-                    .get(format!("{}{}.xml", BASE_URL, crossref))
-                    .send()
-                    .await?;
+                let response = client.get(query_url(&crossref, opts)).send().await?;
                 match response.status() {
                     reqwest::StatusCode::NOT_FOUND => {
                         panic!("this really shouldn't happen, or DBLP's data is buggy")
@@ -171,10 +173,7 @@ impl Record {
                 crossref,
                 ..
             } => {
-                let response = client
-                    .get(format!("{}{}.xml", BASE_URL, crossref))
-                    .send()
-                    .await?;
+                let response = client.get(query_url(&crossref, opts)).send().await?;
                 match response.status() {
                     reqwest::StatusCode::NOT_FOUND => {
                         panic!("this really shouldn't happen, or DBLP's data is buggy")
