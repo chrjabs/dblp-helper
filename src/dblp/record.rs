@@ -307,7 +307,6 @@ fn bibtex_people(
     f: &mut fmt::Formatter<'_>,
     key: &str,
     people: &[String],
-    comma: bool,
     styles: &Styles,
 ) -> fmt::Result {
     if people.is_empty() {
@@ -320,26 +319,20 @@ fn bibtex_people(
             write!(f, " and ")?;
         }
     }
-    if comma {
-        writeln!(f, "}},")
-    } else {
-        writeln!(f, "}}")
-    }
+    writeln!(f, "}},")
 }
 
 fn bibtex_kv<V: fmt::Display>(
     f: &mut fmt::Formatter<'_>,
     key: &str,
     val: &V,
-    comma: bool,
     styles: &Styles,
 ) -> fmt::Result {
     writeln!(
         f,
-        "  {key: <12} = {{{val}}}{comma}",
+        "  {key: <12} = {{{val}}},",
         key = key.style(styles.bibtex_key),
         val = val.style(styles.bibtex_val),
-        comma = if comma { "," } else { "" }
     )
 }
 
@@ -361,23 +354,23 @@ impl fmt::Display for Bibtex<'_> {
                 external,
             } => {
                 bibtex_start(f, "article", key, &self.styles)?;
-                bibtex_people(f, "author", author, true, &self.styles)?;
-                bibtex_kv(f, "title", title, true, &self.styles)?;
-                bibtex_kv(f, "journal", journal, true, &self.styles)?;
-                bibtex_kv(f, "year", year, true, &self.styles)?;
+                bibtex_people(f, "author", author, &self.styles)?;
+                bibtex_kv(f, "title", title, &self.styles)?;
+                bibtex_kv(f, "journal", journal, &self.styles)?;
+                bibtex_kv(f, "year", year, &self.styles)?;
                 if let Some(pages) = pages {
-                    bibtex_kv(f, "pages", pages, true, &self.styles)?;
+                    bibtex_kv(f, "pages", pages, &self.styles)?;
                 }
                 if let Some(volume) = volume {
-                    bibtex_kv(f, "volume", volume, true, &self.styles)?;
+                    bibtex_kv(f, "volume", volume, &self.styles)?;
                 }
                 for external in external {
                     match external {
                         External::Url(url) => {
-                            bibtex_kv(f, "url", url, false, &self.styles)?;
+                            bibtex_kv(f, "url", url, &self.styles)?;
                         }
                         External::Doi(doi) => {
-                            bibtex_kv(f, "doi", doi, false, &self.styles)?;
+                            bibtex_kv(f, "doi", doi, &self.styles)?;
                         }
                     }
                 }
@@ -395,28 +388,28 @@ impl fmt::Display for Bibtex<'_> {
                 isbn,
             } => {
                 bibtex_start(f, "proceedings", key, &self.styles)?;
-                bibtex_people(f, "editor", editor, true, &self.styles)?;
-                bibtex_kv(f, "title", title, true, &self.styles)?;
-                bibtex_kv(f, "year", year, true, &self.styles)?;
+                bibtex_people(f, "editor", editor, &self.styles)?;
+                bibtex_kv(f, "title", title, &self.styles)?;
+                bibtex_kv(f, "year", year, &self.styles)?;
                 if let Some(series) = series {
-                    bibtex_kv(f, "series", series, true, &self.styles)?;
+                    bibtex_kv(f, "series", series, &self.styles)?;
                 }
                 if let Some(volume) = volume {
-                    bibtex_kv(f, "volume", volume, true, &self.styles)?;
+                    bibtex_kv(f, "volume", volume, &self.styles)?;
                 }
                 if let Some(publisher) = publisher {
-                    bibtex_kv(f, "publisher", publisher, true, &self.styles)?;
+                    bibtex_kv(f, "publisher", publisher, &self.styles)?;
                 }
                 for isbn in isbn {
-                    bibtex_kv(f, "isbn", isbn, true, &self.styles)?;
+                    bibtex_kv(f, "isbn", isbn, &self.styles)?;
                 }
                 for external in external {
                     match external {
                         External::Url(url) => {
-                            bibtex_kv(f, "url", url, false, &self.styles)?;
+                            bibtex_kv(f, "url", url, &self.styles)?;
                         }
                         External::Doi(doi) => {
-                            bibtex_kv(f, "doi", doi, false, &self.styles)?;
+                            bibtex_kv(f, "doi", doi, &self.styles)?;
                         }
                     }
                 }
@@ -436,30 +429,30 @@ impl fmt::Display for Bibtex<'_> {
                 external,
             } => {
                 bibtex_start(f, "inproceedings", key, &self.styles)?;
-                bibtex_people(f, "author", author, true, &self.styles)?;
-                bibtex_kv(f, "title", title, true, &self.styles)?;
-                bibtex_people(f, "editor", editor, true, &self.styles)?;
-                bibtex_kv(f, "booktitle", booktitle, true, &self.styles)?;
-                bibtex_kv(f, "year", year, true, &self.styles)?;
+                bibtex_people(f, "author", author, &self.styles)?;
+                bibtex_kv(f, "title", title, &self.styles)?;
+                bibtex_people(f, "editor", editor, &self.styles)?;
+                bibtex_kv(f, "booktitle", booktitle, &self.styles)?;
+                bibtex_kv(f, "year", year, &self.styles)?;
                 if let Some(pages) = pages {
-                    bibtex_kv(f, "pages", pages, true, &self.styles)?;
+                    bibtex_kv(f, "pages", pages, &self.styles)?;
                 }
                 if let Some(series) = series {
-                    bibtex_kv(f, "series", series, true, &self.styles)?;
+                    bibtex_kv(f, "series", series, &self.styles)?;
                 }
                 if let Some(volume) = volume {
-                    bibtex_kv(f, "volume", volume, true, &self.styles)?;
+                    bibtex_kv(f, "volume", volume, &self.styles)?;
                 }
                 if let Some(publisher) = publisher {
-                    bibtex_kv(f, "publisher", publisher, true, &self.styles)?;
+                    bibtex_kv(f, "publisher", publisher, &self.styles)?;
                 }
                 for external in external {
                     match external {
                         External::Url(url) => {
-                            bibtex_kv(f, "url", url, false, &self.styles)?;
+                            bibtex_kv(f, "url", url, &self.styles)?;
                         }
                         External::Doi(doi) => {
-                            bibtex_kv(f, "doi", doi, false, &self.styles)?;
+                            bibtex_kv(f, "doi", doi, &self.styles)?;
                         }
                     }
                 }
@@ -478,27 +471,27 @@ impl fmt::Display for Bibtex<'_> {
                 isbn,
             } => {
                 bibtex_start(f, "book", key, &self.styles)?;
-                bibtex_people(f, "author", author, true, &self.styles)?;
-                bibtex_people(f, "editor", editor, true, &self.styles)?;
-                bibtex_kv(f, "title", title, true, &self.styles)?;
-                bibtex_kv(f, "publisher", publisher, true, &self.styles)?;
-                bibtex_kv(f, "year", year, true, &self.styles)?;
+                bibtex_people(f, "author", author, &self.styles)?;
+                bibtex_people(f, "editor", editor, &self.styles)?;
+                bibtex_kv(f, "title", title, &self.styles)?;
+                bibtex_kv(f, "publisher", publisher, &self.styles)?;
+                bibtex_kv(f, "year", year, &self.styles)?;
                 if let Some(series) = series {
-                    bibtex_kv(f, "series", series, true, &self.styles)?;
+                    bibtex_kv(f, "series", series, &self.styles)?;
                 }
                 if let Some(volume) = volume {
-                    bibtex_kv(f, "volume", volume, true, &self.styles)?;
+                    bibtex_kv(f, "volume", volume, &self.styles)?;
                 }
                 for isbn in isbn {
-                    bibtex_kv(f, "isbn", isbn, true, &self.styles)?;
+                    bibtex_kv(f, "isbn", isbn, &self.styles)?;
                 }
                 for external in external {
                     match external {
                         External::Url(url) => {
-                            bibtex_kv(f, "url", url, false, &self.styles)?;
+                            bibtex_kv(f, "url", url, &self.styles)?;
                         }
                         External::Doi(doi) => {
-                            bibtex_kv(f, "doi", doi, false, &self.styles)?;
+                            bibtex_kv(f, "doi", doi, &self.styles)?;
                         }
                     }
                 }
@@ -518,28 +511,28 @@ impl fmt::Display for Bibtex<'_> {
                 external,
             } => {
                 bibtex_start(f, "incollection", key, &self.styles)?;
-                bibtex_people(f, "author", author, true, &self.styles)?;
-                bibtex_kv(f, "title", title, true, &self.styles)?;
-                bibtex_kv(f, "booktitle", booktitle, true, &self.styles)?;
-                bibtex_people(f, "editor", editor, true, &self.styles)?;
-                bibtex_kv(f, "publisher", publisher, true, &self.styles)?;
-                bibtex_kv(f, "year", year, true, &self.styles)?;
+                bibtex_people(f, "author", author, &self.styles)?;
+                bibtex_kv(f, "title", title, &self.styles)?;
+                bibtex_kv(f, "booktitle", booktitle, &self.styles)?;
+                bibtex_people(f, "editor", editor, &self.styles)?;
+                bibtex_kv(f, "publisher", publisher, &self.styles)?;
+                bibtex_kv(f, "year", year, &self.styles)?;
                 if let Some(pages) = pages {
-                    bibtex_kv(f, "pages", pages, true, &self.styles)?;
+                    bibtex_kv(f, "pages", pages, &self.styles)?;
                 }
                 if let Some(series) = series {
-                    bibtex_kv(f, "series", series, true, &self.styles)?;
+                    bibtex_kv(f, "series", series, &self.styles)?;
                 }
                 if let Some(volume) = volume {
-                    bibtex_kv(f, "volume", volume, true, &self.styles)?;
+                    bibtex_kv(f, "volume", volume, &self.styles)?;
                 }
                 for external in external {
                     match external {
                         External::Url(url) => {
-                            bibtex_kv(f, "url", url, false, &self.styles)?;
+                            bibtex_kv(f, "url", url, &self.styles)?;
                         }
                         External::Doi(doi) => {
-                            bibtex_kv(f, "doi", doi, false, &self.styles)?;
+                            bibtex_kv(f, "doi", doi, &self.styles)?;
                         }
                     }
                 }
@@ -588,6 +581,7 @@ enum Data {
         crossref: String,
     },
     Proceedings {
+        #[serde(default)]
         editor: Vec<String>,
         title: String,
         year: u32,
