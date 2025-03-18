@@ -554,6 +554,21 @@
         "type": "github"
       }
     },
+    "nixpkgs-edge": {
+      "locked": {
+        "lastModified": 1742290770,
+        "narHash": "sha256-koeukud/nhjQ2IH1q1rab2sqWjSX2P4K/WQwdpyRjIA=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "7cea7baacaddb493ca2cd4502582b25b7bf10ab3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "nixpkgs-stable": {
       "locked": {
         "lastModified": 1729973466,
@@ -675,6 +690,7 @@
           "nix-config",
           "nixpkgs"
         ],
+        "nixpkgs-edge": "nixpkgs-edge",
         "rust-overlay": "rust-overlay",
         "systems": "systems_4"
       }
