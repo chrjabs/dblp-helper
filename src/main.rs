@@ -50,6 +50,7 @@ fn fixup(rec: &mut dblp::Record, args: &CommonGetArgs) {
     fixers::page_range(rec);
     fixers::names(rec);
     fixers::acronyms(rec);
+    fixers::weird_urls(rec);
     if !args.unicode {
         fixers::unicode(rec);
     }

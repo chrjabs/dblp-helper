@@ -1,7 +1,7 @@
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use crate::dblp::Record;
+use crate::dblp::{Record, record::External};
 
 mod names;
 mod unicode;
@@ -226,6 +226,20 @@ pub fn acronyms(rec: &mut Record) {
         }
         _ => {}
     }
+}
+
+pub fn weird_urls(rec: &mut Record) {
+    let (Record::Article { external, .. }
+    | Record::Proceedings { external, .. }
+    | Record::Inproceedings { external, .. }
+    | Record::Book { external, .. }
+    | Record::Incollection { external, .. }) = rec;
+    external.retain(|ext| {
+        !matches!(
+            ext,
+            External::Url(s) if s.starts_with("https://www.wikidata.org")
+        )
+    })
 }
 
 #[cfg(test)]
