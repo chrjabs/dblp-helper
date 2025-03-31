@@ -2,8 +2,8 @@ use std::{fs, io};
 
 use clap::Parser;
 use cli::{Color, CommonGetArgs, DblpServerArgs, GetAllArgs, GetArgs, SearchArgs};
-use color_eyre::eyre::{Result, bail};
-use futures::{StreamExt, TryStreamExt, stream};
+use color_eyre::eyre::{bail, Result};
+use futures::{stream, StreamExt, TryStreamExt};
 use owo_colors::OwoColorize;
 
 mod cli;
@@ -57,13 +57,23 @@ fn fixup(rec: &mut dblp::Record, args: &CommonGetArgs) {
 }
 
 async fn get(args: GetArgs, dblp: DblpServerArgs, color: Color) -> Result<()> {
-    let mut rec = dblp::Record::get(&args.key, &dblp).await?;
+    let mut rec = dblp::Record::get(&args.key, !args.common.crossref, &dblp).await?;
     fixup(&mut rec, &args.common);
     let mut bibtex = rec.bibtex();
     if color.should_color(&std::io::stdout()) {
         bibtex.colorize();
     }
     println!("{bibtex}");
+    if let Some(key) = rec.crossref_key() {
+        println!();
+        let mut rec = dblp::Record::get(key, !args.common.crossref, &dblp).await?;
+        fixup(&mut rec, &args.common);
+        let mut bibtex = rec.bibtex();
+        if color.should_color(&std::io::stdout()) {
+            bibtex.colorize();
+        }
+        println!("{bibtex}");
+    }
     Ok(())
 }
 
@@ -78,7 +88,7 @@ async fn fetch_record(
     client: &reqwest::Client,
     opts: &cli::CommonGetArgs,
 ) -> Result<FetchRes, dblp::record::Error> {
-    let mut rec = match dblp::Record::get_with_client(key, dblp, client).await {
+    let mut rec = match dblp::Record::get_with_client(key, !opts.crossref, dblp, client).await {
         Ok(rec) => rec,
         Err(err) => match err {
             dblp::record::Error::UnknownKey(key) => return Ok(FetchRes::Unknown(key)),
@@ -89,18 +99,13 @@ async fn fetch_record(
     Ok(FetchRes::Rec(rec))
 }
 
-async fn get_all(mut args: GetAllArgs, dblp: DblpServerArgs, color: Color) -> Result<()> {
-    args.path.set_extension("aux");
-    let keys: Result<Vec<_>, _> =
-        latex::CiteKeyIter::new(io::BufReader::new(fs::File::open(args.path)?))
-            .filter(|res| res.as_ref().is_ok_and(|key| key.starts_with("DBLP:")))
-            .collect();
-    let mut keys = keys?;
-    keys.sort_unstable();
-    keys.dedup();
-
-    let client = reqwest::Client::new();
-
+async fn fetch_keys(
+    keys: &[String],
+    dblp: &DblpServerArgs,
+    client: &reqwest::Client,
+    opts: &cli::GetAllArgs,
+    color: Color,
+) -> Result<Vec<FetchRes>> {
     // Setup progress information
     let err_styles = {
         let mut styles = cli::Styles::default();
@@ -127,37 +132,93 @@ async fn get_all(mut args: GetAllArgs, dblp: DblpServerArgs, color: Color) -> Re
             if let Some(bar) = &bar {
                 bar.set_message(key.clone());
             }
-            let res = async move { fetch_record(&key, dblp, client, &args.common).await };
+            let res = async move { fetch_record(&key, dblp, client, &opts.common).await };
             if let Some(bar) = &bar {
                 bar.inc(1);
             }
             res
         })
-        .buffered(args.concurrent_requests)
+        .buffered(opts.concurrent_requests)
         .try_collect()
         .await?;
 
-    let mut unknown_keys = String::new();
-    let mut printed = false;
+    Ok(results)
+}
 
+async fn get_all(mut args: GetAllArgs, dblp: DblpServerArgs, color: Color) -> Result<()> {
+    args.path.set_extension("aux");
+    let keys: Result<Vec<_>, _> =
+        latex::CiteKeyIter::new(io::BufReader::new(fs::File::open(&args.path)?))
+            .filter(|res| res.as_ref().is_ok_and(|key| key.starts_with("DBLP:")))
+            .collect();
+    let mut keys = keys?;
+    keys.sort_unstable();
+    keys.dedup();
+
+    let client = reqwest::Client::new();
+
+    let results = fetch_keys(&keys, &dblp, &client, &args, color).await?;
+
+    let mut unknown_keys = String::new();
+    let mut crossref_keys = vec![];
+
+    let mut records: Vec<_> = results
+        .into_iter()
+        .filter_map(|res| match res {
+            FetchRes::Rec(rec) => {
+                if let Some(key) = rec.crossref_key() {
+                    crossref_keys.push(key.to_owned());
+                }
+                Some(rec)
+            }
+            FetchRes::Unknown(key) => {
+                unknown_keys.push_str("\n- ");
+                unknown_keys.push_str(&key);
+                None
+            }
+        })
+        .collect();
+
+    crossref_keys.sort_unstable();
+    crossref_keys.dedup();
+
+    // remove crossref keys we already downloaded
+    let mut idx = 0;
+    crossref_keys.retain(|key| {
+        while idx < records.len() && *records[idx].key() < *key.as_str() {
+            idx += 1;
+        }
+        idx >= records.len() || *records[idx].key() != *key
+    });
+
+    let results = fetch_keys(&crossref_keys, &dblp, &client, &args, color).await?;
+
+    let mut idx = 0;
     for res in results {
         match res {
-            FetchRes::Rec(rec) => {
-                if printed {
-                    println!();
+            FetchRes::Rec(record) => {
+                while idx < records.len() && *records[idx].key() < *record.key() {
+                    idx += 1;
                 }
-                let mut bibtex = rec.bibtex();
-                if color.should_color(&std::io::stdout()) {
-                    bibtex.colorize();
-                }
-                println!("{bibtex}");
-                printed = true;
+                records.insert(idx, record);
+                idx += 1;
             }
             FetchRes::Unknown(key) => {
                 unknown_keys.push_str("\n- ");
                 unknown_keys.push_str(&key);
             }
         }
+    }
+
+    for (idx, rec) in records.into_iter().enumerate() {
+        if idx > 0 {
+            println!();
+        }
+        let mut bibtex = rec.bibtex();
+        if color.should_color(&std::io::stdout()) {
+            bibtex.colorize();
+        }
+        println!("{bibtex}");
     }
 
     if !unknown_keys.is_empty() {

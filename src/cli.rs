@@ -113,6 +113,9 @@ pub struct CommonGetArgs {
     /// Include unicode characters, rather than converting them to TeX
     #[arg(short, long)]
     pub unicode: bool,
+    /// Whether to use crossref style citations for `incollections` and `inproceedings`
+    #[arg(short, long)]
+    pub crossref: bool,
 }
 
 #[derive(clap::Args, Debug, Clone)]

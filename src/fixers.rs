@@ -1,7 +1,10 @@
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use crate::dblp::{Record, record::External};
+use crate::dblp::{
+    record::{Crossref, External},
+    Record,
+};
 
 mod names;
 mod unicode;
@@ -41,9 +44,15 @@ pub fn author_num(rec: &mut Record) {
     }
     match rec {
         Record::Proceedings { editor, .. }
-        | Record::Inproceedings { editor, .. }
+        | Record::Inproceedings {
+            crossref: Crossref::Resolved { editor, .. },
+            ..
+        }
         | Record::Book { editor, .. }
-        | Record::Incollection { editor, .. } => {
+        | Record::Incollection {
+            crossref: Crossref::Resolved { editor, .. },
+            ..
+        } => {
             for editor in editor.iter_mut() {
                 let rep = AUTHOR_NUM_PATTERN.replace(editor, "");
                 let _ = std::mem::replace(editor, rep.to_string());
@@ -88,48 +97,62 @@ pub fn unicode(rec: &mut Record) {
         Record::Inproceedings {
             author,
             title,
-            editor,
             booktitle,
-            series,
-            publisher,
+            crossref,
             ..
         } => {
             for author in author.iter_mut() {
                 unicode::replace(author);
             }
-            for editor in editor.iter_mut() {
-                unicode::replace(editor);
-            }
             unicode::replace(title);
-            if let Some(series) = series {
-                unicode::replace(series);
-            }
-            if let Some(publisher) = publisher {
-                unicode::replace(publisher);
-            }
             unicode::replace(booktitle);
+            if let Crossref::Resolved {
+                editor,
+                series,
+                publisher,
+                ..
+            } = crossref
+            {
+                for editor in editor.iter_mut() {
+                    unicode::replace(editor);
+                }
+                if let Some(series) = series {
+                    unicode::replace(series);
+                }
+                if let Some(publisher) = publisher {
+                    unicode::replace(publisher);
+                }
+            }
         }
         Record::Incollection {
             author,
             title,
-            editor,
             booktitle,
-            series,
-            publisher,
+            crossref,
             ..
         } => {
             for author in author.iter_mut() {
                 unicode::replace(author);
             }
-            for editor in editor.iter_mut() {
-                unicode::replace(editor);
-            }
             unicode::replace(title);
-            if let Some(series) = series {
-                unicode::replace(series);
-            }
-            unicode::replace(publisher);
             unicode::replace(booktitle);
+            if let Crossref::Resolved {
+                editor,
+                series,
+                publisher,
+                ..
+            } = crossref
+            {
+                for editor in editor.iter_mut() {
+                    unicode::replace(editor);
+                }
+                if let Some(series) = series {
+                    unicode::replace(series);
+                }
+                if let Some(publisher) = publisher {
+                    unicode::replace(publisher);
+                }
+            }
         }
         Record::Book {
             author,
@@ -149,7 +172,9 @@ pub fn unicode(rec: &mut Record) {
             if let Some(series) = series {
                 unicode::replace(series);
             }
-            unicode::replace(publisher);
+            if let Some(publisher) = publisher {
+                unicode::replace(publisher);
+            }
         }
     }
 }
@@ -168,9 +193,15 @@ pub fn names(rec: &mut Record) {
     }
     match rec {
         Record::Proceedings { editor, .. }
-        | Record::Inproceedings { editor, .. }
+        | Record::Inproceedings {
+            crossref: Crossref::Resolved { editor, .. },
+            ..
+        }
         | Record::Book { editor, .. }
-        | Record::Incollection { editor, .. } => {
+        | Record::Incollection {
+            crossref: Crossref::Resolved { editor, .. },
+            ..
+        } => {
             for editor in editor {
                 names::fix(editor);
             }
@@ -237,7 +268,7 @@ pub fn weird_urls(rec: &mut Record) {
     external.retain(|ext| {
         !matches!(
             ext,
-            External::Url(s) if s.starts_with("https://www.wikidata.org")
+            External::Url(s) if s.starts_with("https://www.wikidata.org") || s.starts_with("https://ojs.aaai.org")
         )
     })
 }

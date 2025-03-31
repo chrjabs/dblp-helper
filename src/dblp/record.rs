@@ -49,21 +49,18 @@ pub enum Record {
         key: String,
         author: Vec<String>,
         title: String,
-        editor: Vec<String>,
         booktitle: String,
         year: u32,
         pages: Option<String>,
-        series: Option<String>,
-        volume: Option<String>,
-        publisher: Option<String>,
         external: Vec<External>,
+        crossref: Crossref,
     },
     Book {
         key: String,
         author: Vec<String>,
         editor: Vec<String>,
         title: String,
-        publisher: String,
+        publisher: Option<String>,
         year: u32,
         series: Option<String>,
         volume: Option<String>,
@@ -75,24 +72,37 @@ pub enum Record {
         author: Vec<String>,
         title: String,
         booktitle: String,
-        editor: Vec<String>,
-        publisher: String,
         year: u32,
         pages: Option<String>,
+        external: Vec<External>,
+        crossref: Crossref,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub enum Crossref {
+    Key(String),
+    Resolved {
+        editor: Vec<String>,
+        publisher: Option<String>,
         series: Option<String>,
         volume: Option<String>,
-        external: Vec<External>,
     },
 }
 
 impl Record {
-    pub async fn get(key: &str, opts: &crate::cli::DblpServerArgs) -> Result<Self, Error> {
+    pub async fn get(
+        key: &str,
+        resolve_crossref: bool,
+        opts: &crate::cli::DblpServerArgs,
+    ) -> Result<Self, Error> {
         let client = reqwest::Client::new();
-        Self::get_with_client(key, opts, &client).await
+        Self::get_with_client(key, resolve_crossref, opts, &client).await
     }
 
     pub async fn get_with_client(
         key: &str,
+        resolve_crossref: bool,
         opts: &crate::cli::DblpServerArgs,
         client: &reqwest::Client,
     ) -> Result<Self, Error> {
@@ -127,41 +137,57 @@ impl Record {
                 title,
                 pages,
                 year,
+                booktitle,
                 ee,
                 crossref,
                 ..
             } => {
-                let response = client.get(query_url(&crossref, opts)).send().await?;
-                match response.status() {
-                    reqwest::StatusCode::NOT_FOUND => {
-                        panic!("this really shouldn't happen, or DBLP's data is buggy")
+                if resolve_crossref {
+                    let response = client.get(query_url(&crossref, opts)).send().await?;
+                    match response.status() {
+                        reqwest::StatusCode::NOT_FOUND => {
+                            panic!("this really shouldn't happen, or DBLP's data is buggy")
+                        }
+                        code if !code.is_success() => return Err(Error::Http(code)),
+                        _ => {}
                     }
-                    code if !code.is_success() => return Err(Error::Http(code)),
-                    _ => {}
-                }
-                let Data::Proceedings {
-                    editor,
-                    title: booktitle,
-                    series,
-                    volume,
-                    publisher,
-                    ..
-                } = quick_xml::de::from_str::<XmlRecord>(&response.text().await?)?.value
-                else {
-                    panic!("crossref data does not match");
-                };
-                Self::Inproceedings {
-                    key: key.to_string(),
-                    author,
-                    title,
-                    editor,
-                    booktitle,
-                    pages,
-                    year,
-                    volume,
-                    series,
-                    publisher,
-                    external: ee.into_iter().map(External::from).collect(),
+                    let Data::Proceedings {
+                        editor,
+                        title: booktitle,
+                        series,
+                        volume,
+                        publisher,
+                        ..
+                    } = quick_xml::de::from_str::<XmlRecord>(&response.text().await?)?.value
+                    else {
+                        panic!("crossref data does not match");
+                    };
+                    Self::Inproceedings {
+                        key: key.to_string(),
+                        author,
+                        title,
+                        booktitle,
+                        year,
+                        pages,
+                        external: ee.into_iter().map(External::from).collect(),
+                        crossref: Crossref::Resolved {
+                            editor,
+                            publisher,
+                            series,
+                            volume,
+                        },
+                    }
+                } else {
+                    Self::Inproceedings {
+                        key: key.to_string(),
+                        author,
+                        title,
+                        booktitle,
+                        year,
+                        pages,
+                        external: ee.into_iter().map(External::from).collect(),
+                        crossref: Crossref::Key(crossref),
+                    }
                 }
             }
             Data::Incollection {
@@ -169,41 +195,57 @@ impl Record {
                 title,
                 pages,
                 year,
+                booktitle,
                 ee,
                 crossref,
                 ..
             } => {
-                let response = client.get(query_url(&crossref, opts)).send().await?;
-                match response.status() {
-                    reqwest::StatusCode::NOT_FOUND => {
-                        panic!("this really shouldn't happen, or DBLP's data is buggy")
+                if resolve_crossref {
+                    let response = client.get(query_url(&crossref, opts)).send().await?;
+                    match response.status() {
+                        reqwest::StatusCode::NOT_FOUND => {
+                            panic!("this really shouldn't happen, or DBLP's data is buggy")
+                        }
+                        code if !code.is_success() => return Err(Error::Http(code)),
+                        _ => {}
                     }
-                    code if !code.is_success() => return Err(Error::Http(code)),
-                    _ => {}
-                }
-                let Data::Book {
-                    editor,
-                    title: booktitle,
-                    series,
-                    volume,
-                    publisher,
-                    ..
-                } = quick_xml::de::from_str::<XmlRecord>(&response.text().await?)?.value
-                else {
-                    panic!("crossref data does not match");
-                };
-                Self::Incollection {
-                    key: key.to_string(),
-                    author,
-                    title,
-                    editor,
-                    booktitle,
-                    pages,
-                    year,
-                    volume,
-                    series,
-                    publisher,
-                    external: ee.into_iter().map(External::from).collect(),
+                    let Data::Book {
+                        editor,
+                        title: booktitle,
+                        series,
+                        volume,
+                        publisher,
+                        ..
+                    } = quick_xml::de::from_str::<XmlRecord>(&response.text().await?)?.value
+                    else {
+                        panic!("crossref data does not match");
+                    };
+                    Self::Incollection {
+                        key: key.to_string(),
+                        author,
+                        title,
+                        booktitle,
+                        year,
+                        pages,
+                        external: ee.into_iter().map(External::from).collect(),
+                        crossref: Crossref::Resolved {
+                            editor,
+                            publisher,
+                            series,
+                            volume,
+                        },
+                    }
+                } else {
+                    Self::Incollection {
+                        key: key.to_string(),
+                        author,
+                        title,
+                        booktitle,
+                        year,
+                        pages,
+                        external: ee.into_iter().map(External::from).collect(),
+                        crossref: Crossref::Key(crossref),
+                    }
                 }
             }
             Data::Proceedings {
@@ -256,6 +298,31 @@ impl Record {
         Bibtex {
             value: self,
             styles: Box::default(),
+        }
+    }
+
+    pub fn crossref_key(&self) -> Option<&str> {
+        if let Record::Inproceedings {
+            crossref: Crossref::Key(key),
+            ..
+        }
+        | Record::Incollection {
+            crossref: Crossref::Key(key),
+            ..
+        } = self
+        {
+            return Some(key);
+        }
+        None
+    }
+
+    pub fn key(&self) -> &str {
+        match self {
+            Record::Article { key, .. }
+            | Record::Proceedings { key, .. }
+            | Record::Inproceedings { key, .. }
+            | Record::Book { key, .. }
+            | Record::Incollection { key, .. } => key,
         }
     }
 }
@@ -419,32 +486,19 @@ impl fmt::Display for Bibtex<'_> {
                 key,
                 author,
                 title,
-                editor,
                 booktitle,
                 pages,
                 year,
-                volume,
-                series,
-                publisher,
                 external,
+                crossref,
             } => {
                 bibtex_start(f, "inproceedings", key, &self.styles)?;
                 bibtex_people(f, "author", author, &self.styles)?;
                 bibtex_kv(f, "title", title, &self.styles)?;
-                bibtex_people(f, "editor", editor, &self.styles)?;
                 bibtex_kv(f, "booktitle", booktitle, &self.styles)?;
                 bibtex_kv(f, "year", year, &self.styles)?;
                 if let Some(pages) = pages {
                     bibtex_kv(f, "pages", pages, &self.styles)?;
-                }
-                if let Some(series) = series {
-                    bibtex_kv(f, "series", series, &self.styles)?;
-                }
-                if let Some(volume) = volume {
-                    bibtex_kv(f, "volume", volume, &self.styles)?;
-                }
-                if let Some(publisher) = publisher {
-                    bibtex_kv(f, "publisher", publisher, &self.styles)?;
                 }
                 for external in external {
                     match external {
@@ -453,6 +507,28 @@ impl fmt::Display for Bibtex<'_> {
                         }
                         External::Doi(doi) => {
                             bibtex_kv(f, "doi", doi, &self.styles)?;
+                        }
+                    }
+                }
+                match crossref {
+                    Crossref::Key(key) => {
+                        bibtex_kv(f, "crossref", &format!("DBLP:{key}"), &self.styles)?
+                    }
+                    Crossref::Resolved {
+                        editor,
+                        publisher,
+                        series,
+                        volume,
+                    } => {
+                        bibtex_people(f, "editor", editor, &self.styles)?;
+                        if let Some(series) = series {
+                            bibtex_kv(f, "series", series, &self.styles)?;
+                        }
+                        if let Some(volume) = volume {
+                            bibtex_kv(f, "volume", volume, &self.styles)?;
+                        }
+                        if let Some(publisher) = publisher {
+                            bibtex_kv(f, "publisher", publisher, &self.styles)?;
                         }
                     }
                 }
@@ -474,7 +550,9 @@ impl fmt::Display for Bibtex<'_> {
                 bibtex_people(f, "author", author, &self.styles)?;
                 bibtex_people(f, "editor", editor, &self.styles)?;
                 bibtex_kv(f, "title", title, &self.styles)?;
-                bibtex_kv(f, "publisher", publisher, &self.styles)?;
+                if let Some(publisher) = publisher {
+                    bibtex_kv(f, "publisher", publisher, &self.styles)?;
+                }
                 bibtex_kv(f, "year", year, &self.styles)?;
                 if let Some(series) = series {
                     bibtex_kv(f, "series", series, &self.styles)?;
@@ -501,30 +579,19 @@ impl fmt::Display for Bibtex<'_> {
                 key,
                 author,
                 title,
-                editor,
                 booktitle,
                 pages,
                 year,
-                volume,
-                series,
-                publisher,
                 external,
+                crossref,
             } => {
                 bibtex_start(f, "incollection", key, &self.styles)?;
                 bibtex_people(f, "author", author, &self.styles)?;
                 bibtex_kv(f, "title", title, &self.styles)?;
                 bibtex_kv(f, "booktitle", booktitle, &self.styles)?;
-                bibtex_people(f, "editor", editor, &self.styles)?;
-                bibtex_kv(f, "publisher", publisher, &self.styles)?;
                 bibtex_kv(f, "year", year, &self.styles)?;
                 if let Some(pages) = pages {
                     bibtex_kv(f, "pages", pages, &self.styles)?;
-                }
-                if let Some(series) = series {
-                    bibtex_kv(f, "series", series, &self.styles)?;
-                }
-                if let Some(volume) = volume {
-                    bibtex_kv(f, "volume", volume, &self.styles)?;
                 }
                 for external in external {
                     match external {
@@ -533,6 +600,28 @@ impl fmt::Display for Bibtex<'_> {
                         }
                         External::Doi(doi) => {
                             bibtex_kv(f, "doi", doi, &self.styles)?;
+                        }
+                    }
+                }
+                match crossref {
+                    Crossref::Key(key) => {
+                        bibtex_kv(f, "crossref", &format!("DBLP:{key}"), &self.styles)?
+                    }
+                    Crossref::Resolved {
+                        editor,
+                        publisher,
+                        series,
+                        volume,
+                    } => {
+                        bibtex_people(f, "editor", editor, &self.styles)?;
+                        if let Some(series) = series {
+                            bibtex_kv(f, "series", series, &self.styles)?;
+                        }
+                        if let Some(volume) = volume {
+                            bibtex_kv(f, "volume", volume, &self.styles)?;
+                        }
+                        if let Some(publisher) = publisher {
+                            bibtex_kv(f, "publisher", publisher, &self.styles)?;
                         }
                     }
                 }
@@ -599,7 +688,7 @@ enum Data {
         #[serde(default)]
         editor: Vec<String>,
         title: String,
-        publisher: String,
+        publisher: Option<String>,
         year: u32,
         series: Option<String>,
         volume: Option<String>,
