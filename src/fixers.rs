@@ -272,7 +272,11 @@ pub fn weird_urls(rec: &mut Record) {
 }
 
 pub fn date_ranges(rec: &mut Record) {
-    if let Record::Inproceedings { booktitle, .. } | Record::Incollection { booktitle, .. } = rec {
+    if let Record::Inproceedings { booktitle, .. }
+    | Record::Proceedings {
+        title: booktitle, ..
+    } = rec
+    {
         let rep = DATE_RANGE_PATTERN.replace(booktitle, "${1}${3}--${2}${4}");
         *booktitle = rep.to_string();
     }
