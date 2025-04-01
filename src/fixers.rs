@@ -13,7 +13,7 @@ lazy_static! {
     static ref RANGE_PATTERN: Regex = Regex::new(r"(\d)-(\d)").unwrap();
     static ref AUTHOR_NUM_PATTERN: Regex = Regex::new(r" \d\d\d\d$").unwrap();
     static ref WORD_PATTERN: Regex = Regex::new(r"\w+").unwrap();
-    static ref DATE_RANGE_PATTERN: Regex = Regex::new(r"(\d)-(\d)|(\d\s)-(\sJanuary|\sFebruary|\sMarch|\sApril|\sMay|\sJune|\sJuly|\sAugust|\sSeptember|\sNovember|\sDecember)").unwrap();
+    static ref DATE_RANGE_PATTERN: Regex = Regex::new(r"(\d)-(\d)|(\d\s)-(\sJanuary|\sFebruary|\sMarch|\sApril|\sMay|\sJune|\sJuly|\sAugust|\sSeptember|\sOctober|\sNovember|\sDecember)").unwrap();
 }
 
 pub fn page_range(rec: &mut Record) {
