@@ -13,6 +13,7 @@ lazy_static! {
     static ref RANGE_PATTERN: Regex = Regex::new(r"(\d)-(\d)").unwrap();
     static ref AUTHOR_NUM_PATTERN: Regex = Regex::new(r" \d\d\d\d$").unwrap();
     static ref WORD_PATTERN: Regex = Regex::new(r"\w+").unwrap();
+    static ref DATE_RANGE_PATTERN: Regex = Regex::new(r"(\d)-(\d)|(\d\s)-(\sJanuary|\sFebruary|\sMarch|\sApril|\sMay|\sJune|\sJuly|\sAugust|\sSeptember|\sNovember|\sDecember)").unwrap();
 }
 
 pub fn page_range(rec: &mut Record) {
@@ -22,7 +23,7 @@ pub fn page_range(rec: &mut Record) {
         | Record::Incollection { pages, .. } => {
             if let Some(pages) = pages {
                 let rep = RANGE_PATTERN.replace(pages, "${1}--${2}");
-                let _ = std::mem::replace(pages, rep.to_string());
+                *pages = rep.to_string();
             }
         }
         _ => {}
@@ -37,7 +38,7 @@ pub fn author_num(rec: &mut Record) {
         | Record::Incollection { author, .. } => {
             for author in author.iter_mut() {
                 let rep = AUTHOR_NUM_PATTERN.replace(author, "");
-                let _ = std::mem::replace(author, rep.to_string());
+                *author = rep.to_string();
             }
         }
         _ => {}
@@ -55,7 +56,7 @@ pub fn author_num(rec: &mut Record) {
         } => {
             for editor in editor.iter_mut() {
                 let rep = AUTHOR_NUM_PATTERN.replace(editor, "");
-                let _ = std::mem::replace(editor, rep.to_string());
+                *editor = rep.to_string();
             }
         }
         _ => {}
@@ -251,11 +252,8 @@ pub fn acronyms(rec: &mut Record) {
     | Record::Book { title, .. }
     | Record::Incollection { title, .. }) = rec;
     fix_acronyms(title);
-    match rec {
-        Record::Inproceedings { booktitle, .. } | Record::Incollection { booktitle, .. } => {
-            fix_acronyms(booktitle);
-        }
-        _ => {}
+    if let Record::Inproceedings { booktitle, .. } | Record::Incollection { booktitle, .. } = rec {
+        fix_acronyms(booktitle);
     }
 }
 
@@ -271,6 +269,25 @@ pub fn weird_urls(rec: &mut Record) {
             External::Url(s) if s.starts_with("https://www.wikidata.org") || s.starts_with("https://ojs.aaai.org")
         )
     })
+}
+
+pub fn date_ranges(rec: &mut Record) {
+    if let Record::Inproceedings { booktitle, .. } | Record::Incollection { booktitle, .. } = rec {
+        let rep = DATE_RANGE_PATTERN.replace(booktitle, "${1}${3}--${2}${4}");
+        *booktitle = rep.to_string();
+    }
+}
+
+pub fn dashes(rec: &mut Record) {
+    let (Record::Article { title, .. }
+    | Record::Proceedings { title, .. }
+    | Record::Inproceedings { title, .. }
+    | Record::Book { title, .. }
+    | Record::Incollection { title, .. }) = rec;
+    *title = title.replace(" - ", "---");
+    if let Record::Inproceedings { booktitle, .. } | Record::Incollection { booktitle, .. } = rec {
+        *booktitle = booktitle.replace(" - ", "---");
+    }
 }
 
 pub fn expand_booktitle(rec: &mut Record, crossref: &Record) {
