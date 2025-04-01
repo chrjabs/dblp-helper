@@ -227,7 +227,7 @@ fn fix_acronyms(string: &mut String) {
         let n_upper = matched
             .as_str()
             .chars()
-            .fold(0, |cnt, ch| if ch.is_uppercase() { cnt + 1 } else { 0 });
+            .fold(0, |cnt, ch| if ch.is_uppercase() { cnt + 1 } else { cnt });
         if n_upper > 1 || (!first_upper && n_upper > 0) {
             if changed.is_none() {
                 changed = Some(string.clone());
@@ -310,5 +310,13 @@ mod tests {
         let mut text = String::from("MaxSAT-based bi-objective optimization");
         super::fix_acronyms(&mut text);
         assert_eq!(text, "{MaxSAT}-based bi-objective optimization");
+
+        let mut text =
+            String::from("Using Small MUSes to Explain How to Solve Pen and Paper Puzzles.");
+        super::fix_acronyms(&mut text);
+        assert_eq!(
+            text,
+            "Using Small {MUSes} to Explain How to Solve Pen and Paper Puzzles."
+        );
     }
 }
