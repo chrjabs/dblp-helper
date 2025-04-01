@@ -2,8 +2,8 @@ use std::{fs, io};
 
 use clap::Parser;
 use cli::{Color, CommonGetArgs, DblpServerArgs, GetAllArgs, GetArgs, SearchArgs};
-use color_eyre::eyre::{bail, Result};
-use futures::{stream, StreamExt, TryStreamExt};
+use color_eyre::eyre::{Result, bail};
+use futures::{StreamExt, TryStreamExt, stream};
 use owo_colors::OwoColorize;
 
 mod cli;
@@ -132,7 +132,7 @@ async fn fetch_keys(
             if let Some(bar) = &bar {
                 bar.set_message(key.clone());
             }
-            let res = async move { fetch_record(&key, dblp, client, &opts.common).await };
+            let res = async move { fetch_record(key, dblp, client, &opts.common).await };
             if let Some(bar) = &bar {
                 bar.inc(1);
             }
@@ -182,35 +182,33 @@ async fn get_all(mut args: GetAllArgs, dblp: DblpServerArgs, color: Color) -> Re
     crossref_keys.sort_unstable();
     crossref_keys.dedup();
 
+    let mut crossref_recs = Vec::with_capacity(crossref_keys.len());
+
     // remove crossref keys we already downloaded
     let mut idx = 0;
     crossref_keys.retain(|key| {
         while idx < records.len() && *records[idx].key() < *key.as_str() {
             idx += 1;
         }
-        idx >= records.len() || *records[idx].key() != *key
+        if idx < records.len() && *records[idx].key() == *key {
+            crossref_recs.push(records.remove(idx));
+            return false;
+        }
+        true
     });
 
     let results = fetch_keys(&crossref_keys, &dblp, &client, &args, color).await?;
 
-    let mut idx = 0;
-    for res in results {
-        match res {
-            FetchRes::Rec(record) => {
-                while idx < records.len() && *records[idx].key() < *record.key() {
-                    idx += 1;
-                }
-                records.insert(idx, record);
-                idx += 1;
-            }
-            FetchRes::Unknown(key) => {
-                unknown_keys.push_str("\n- ");
-                unknown_keys.push_str(&key);
-            }
+    crossref_recs.extend(results.into_iter().filter_map(|res| match res {
+        FetchRes::Rec(record) => Some(record),
+        FetchRes::Unknown(key) => {
+            unknown_keys.push_str("\n- ");
+            unknown_keys.push_str(&key);
+            None
         }
-    }
+    }));
 
-    for (idx, rec) in records.into_iter().enumerate() {
+    for (idx, rec) in records.into_iter().chain(crossref_recs).enumerate() {
         if idx > 0 {
             println!();
         }
