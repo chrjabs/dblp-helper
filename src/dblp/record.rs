@@ -325,6 +325,16 @@ impl Record {
             | Record::Incollection { key, .. } => key,
         }
     }
+
+    pub fn title(&self) -> &str {
+        match self {
+            Record::Article { title, .. }
+            | Record::Proceedings { title, .. }
+            | Record::Inproceedings { title, .. }
+            | Record::Book { title, .. }
+            | Record::Incollection { title, .. } => title,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

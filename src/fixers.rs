@@ -2,8 +2,8 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 use crate::dblp::{
-    record::{Crossref, External},
     Record,
+    record::{Crossref, External},
 };
 
 mod names;
@@ -271,6 +271,24 @@ pub fn weird_urls(rec: &mut Record) {
             External::Url(s) if s.starts_with("https://www.wikidata.org") || s.starts_with("https://ojs.aaai.org")
         )
     })
+}
+
+pub fn expand_booktitle(rec: &mut Record, crossref: &Record) {
+    match rec {
+        Record::Inproceedings {
+            booktitle,
+            crossref: Crossref::Key(_),
+            ..
+        }
+        | Record::Incollection {
+            booktitle,
+            crossref: Crossref::Key(_),
+            ..
+        } => {
+            *booktitle = crossref.title().to_owned();
+        }
+        _ => panic!("got non-crossref record"),
+    }
 }
 
 #[cfg(test)]

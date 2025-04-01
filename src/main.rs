@@ -3,6 +3,7 @@ use std::{fs, io};
 use clap::Parser;
 use cli::{Color, CommonGetArgs, DblpServerArgs, GetAllArgs, GetArgs, SearchArgs};
 use color_eyre::eyre::{Result, bail};
+use dblp::Record;
 use futures::{StreamExt, TryStreamExt, stream};
 use owo_colors::OwoColorize;
 
@@ -59,15 +60,21 @@ fn fixup(rec: &mut dblp::Record, args: &CommonGetArgs) {
 async fn get(args: GetArgs, dblp: DblpServerArgs, color: Color) -> Result<()> {
     let mut rec = dblp::Record::get(&args.key, !args.common.crossref, &dblp).await?;
     fixup(&mut rec, &args.common);
+    let crossref = if let Some(key) = rec.crossref_key() {
+        let mut crossref = dblp::Record::get(key, !args.common.crossref, &dblp).await?;
+        fixup(&mut crossref, &args.common);
+        fixers::expand_booktitle(&mut rec, &crossref);
+        Some(crossref)
+    } else {
+        None
+    };
     let mut bibtex = rec.bibtex();
     if color.should_color(&std::io::stdout()) {
         bibtex.colorize();
     }
     println!("{bibtex}");
-    if let Some(key) = rec.crossref_key() {
+    if let Some(rec) = crossref {
         println!();
-        let mut rec = dblp::Record::get(key, !args.common.crossref, &dblp).await?;
-        fixup(&mut rec, &args.common);
         let mut bibtex = rec.bibtex();
         if color.should_color(&std::io::stdout()) {
             bibtex.colorize();
@@ -207,6 +214,21 @@ async fn get_all(mut args: GetAllArgs, dblp: DblpServerArgs, color: Color) -> Re
             None
         }
     }));
+
+    crossref_recs.sort_unstable_by(|a, b| a.key().cmp(b.key()));
+
+    // extend booktitles from crossref
+    if args.common.crossref {
+        for rec in &mut records {
+            if let Some(key) = rec.crossref_key() {
+                // TODO: can probably do something more efficient here
+                let Ok(idx) = crossref_recs.binary_search_by_key(&key, Record::key) else {
+                    bail!("crossref key not found");
+                };
+                fixers::expand_booktitle(rec, &crossref_recs[idx]);
+            }
+        }
+    }
 
     for (idx, rec) in records.into_iter().chain(crossref_recs).enumerate() {
         if idx > 0 {
