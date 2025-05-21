@@ -2,9 +2,9 @@ use std::{fs, io};
 
 use clap::Parser;
 use cli::{Color, CommonGetArgs, DblpServerArgs, GetAllArgs, GetArgs, SearchArgs};
-use color_eyre::eyre::{Result, bail};
+use color_eyre::eyre::{bail, Result};
 use dblp::Record;
-use futures::{StreamExt, TryStreamExt, stream};
+use futures::{stream, StreamExt, TryStreamExt};
 use owo_colors::OwoColorize;
 
 mod cli;
@@ -54,6 +54,7 @@ fn fixup(rec: &mut dblp::Record, args: &CommonGetArgs) {
     fixers::weird_urls(rec);
     fixers::date_ranges(rec);
     fixers::dashes(rec);
+    fixers::manually_correct(rec);
     if !args.unicode {
         fixers::unicode(rec);
     }

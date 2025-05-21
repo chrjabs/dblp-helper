@@ -2,8 +2,8 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 use crate::dblp::{
-    Record,
     record::{Crossref, External},
+    Record,
 };
 
 mod names;
@@ -225,10 +225,11 @@ fn fix_acronyms(string: &mut String) {
             .next()
             .map(char::is_uppercase)
             .unwrap_or(false);
-        let n_upper = matched
-            .as_str()
-            .chars()
-            .fold(0, |cnt, ch| if ch.is_uppercase() { cnt + 1 } else { cnt });
+        let n_upper =
+            matched
+                .as_str()
+                .chars()
+                .fold(0, |cnt, ch| if ch.is_uppercase() { cnt + 1 } else { cnt });
         if n_upper > 1 || (!first_upper && n_upper > 0) {
             if changed.is_none() {
                 changed = Some(string.clone());
@@ -309,6 +310,18 @@ pub fn expand_booktitle(rec: &mut Record, crossref: &Record) {
             *booktitle = crossref.title().to_owned();
         }
         _ => panic!("got non-crossref record"),
+    }
+}
+
+/// Manual fixer for mistakes in DBLP data
+pub fn manually_correct(rec: &mut Record) {
+    // Mistake introduced in the metadata in the final editing process
+    if rec.key() == "conf/tacas/JabsBBJ25" {
+        if let Record::Inproceedings { title, .. } = rec {
+            *title = String::from(
+                "Certifying Pareto Optimality in Multi-objective Maximum Satisfiability",
+            );
+        }
     }
 }
 
