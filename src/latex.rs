@@ -26,8 +26,19 @@ impl<R: io::BufRead> Iterator for CiteKeyIter<R> {
                         if read == 0 {
                             return None;
                         }
+                        // latex-native citation
                         if self.buffer.starts_with("\\citation{") {
                             self.buffer.drain(..10);
+                            break;
+                        }
+                        // biblatex citation
+                        if self.buffer.starts_with("\\abx@aux@cite{") {
+                            self.buffer.drain(..14);
+                            let strip_till = self
+                                .buffer
+                                .find('{')
+                                .unwrap_or_else(|| panic!("invalid line in `.aux` file"));
+                            self.buffer.drain(..=strip_till);
                             break;
                         }
                         // skip non-citation line
@@ -38,7 +49,8 @@ impl<R: io::BufRead> Iterator for CiteKeyIter<R> {
             }
         }
 
-        // `self.buffer` has citation line with `\citation{` already stripped
+        // `self.buffer` has citation line with `\citation{` or `\abx@aux@cite{<>}{` already
+        // stripped
         let sep = self.buffer.find(',').unwrap_or_else(|| {
             self.buffer
                 .find('}')
