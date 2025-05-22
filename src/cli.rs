@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use owo_colors::Style;
 
 #[derive(clap::Parser, Clone, Debug)]
@@ -65,6 +63,8 @@ pub struct Styles {
     pub bibtex_key: Style,
     pub bibtex_val: Style,
     pub info: Style,
+    pub warn_head: Style,
+    pub warn_body: Style,
 }
 
 impl Styles {
@@ -83,8 +83,32 @@ impl Styles {
         self.bibtex_key = Style::new().magenta();
         self.bibtex_val = Style::new().blue();
         self.info = Style::new().cyan().bold();
+        self.warn_head = Style::new().yellow().bold();
+        self.warn_body = Style::new().yellow();
     }
 }
+
+macro_rules! warning {
+    ($context:expr, $($arg:tt)*) => {{
+        use std::io::IsTerminal;
+
+        use owo_colors::OwoColorize;
+
+        let mut styles = crate::cli::Styles::default();
+        // TODO: ideally we should respect the `color` option here
+        if std::io::stderr().is_terminal() {
+            styles.colorize();
+        }
+        eprint!(
+            "{}{}{} ",
+            "Warning (".style(styles.warn_head),
+            $context.style(styles.warn_head),
+            "):".style(styles.warn_head)
+        );
+        eprintln!("{}", format!($($arg)*).style(styles.warn_body));
+    }};
+}
+pub(crate) use warning;
 
 #[derive(clap::Subcommand, Debug, Clone)]
 pub enum Commands {
@@ -101,7 +125,7 @@ pub struct SearchArgs {
     /// The DBLP query
     pub query: String,
     /// The type of query to perform
-    #[arg(short, long, default_value_t = crate::dblp::search::Type::default())]
+    #[arg(short = 'T', long, default_value_t = crate::dblp::search::Type::default())]
     pub r#type: crate::dblp::search::Type,
     /// The number of hits to request
     #[arg(short = 'n', long)]
@@ -132,10 +156,22 @@ pub struct GetAllArgs {
     ///
     /// The tool will read the `.aux` file. Assuming your main file is called `main.tex`, this can
     /// point to `main.tex`, `main.aux` or `main`.
-    pub path: PathBuf,
+    pub path: camino::Utf8PathBuf,
     #[command(flatten)]
     pub common: CommonGetArgs,
     /// The maximum number of concurrent requests to DBLP to open
     #[arg(short = 'j', long, default_value_t = 8)]
     pub concurrent_requests: usize,
+    /// Don't follow `\@input` commands in the LaTeX aux file
+    #[arg(short = 'f', long)]
+    pub no_follow_inputs: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn verify_cli_args() {
+        use clap::CommandFactory;
+        super::Args::command().debug_assert()
+    }
 }

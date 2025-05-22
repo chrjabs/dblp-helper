@@ -1,10 +1,8 @@
-use std::{fs, io};
-
 use clap::Parser;
 use cli::{Color, CommonGetArgs, DblpServerArgs, GetAllArgs, GetArgs, SearchArgs};
-use color_eyre::eyre::{bail, Result};
+use color_eyre::eyre::{Result, bail};
 use dblp::Record;
-use futures::{stream, StreamExt, TryStreamExt};
+use futures::{StreamExt, TryStreamExt, stream};
 use owo_colors::OwoColorize;
 
 mod cli;
@@ -157,10 +155,12 @@ async fn fetch_keys(
 
 async fn get_all(mut args: GetAllArgs, dblp: DblpServerArgs, color: Color) -> Result<()> {
     args.path.set_extension("aux");
-    let keys: Result<Vec<_>, _> =
-        latex::CiteKeyIter::new(io::BufReader::new(fs::File::open(&args.path)?))
-            .filter(|res| res.as_ref().is_ok_and(|key| key.starts_with("DBLP:")))
-            .collect();
+    let keys: Result<Vec<_>, _> = latex::CiteKeyIter::new(&args.path, !args.no_follow_inputs)?
+        .filter(|res| {
+            res.as_ref().is_err() || res.as_ref().is_ok_and(|key| key.starts_with("DBLP:"))
+        })
+        .collect();
+    dbg!(&keys);
     let mut keys = keys?;
     keys.sort_unstable();
     keys.dedup();
