@@ -1571,7 +1571,9 @@ pub fn replace(input: &mut String) {
         let Some(replaced) = UNICODE_2_LATEX.get(&char) else {
             panic!("unknown unicode character");
         };
+        out.push('{');
         out.push_str(replaced);
+        out.push('}');
     }
     if let Some(out) = out {
         let _ = std::mem::replace(input, out);
