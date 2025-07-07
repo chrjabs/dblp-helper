@@ -7,7 +7,7 @@ use crate::cli::Styles;
 const BASE: &str = "/rec/";
 
 fn query_url(key: &str, opts: &crate::cli::DblpServerArgs) -> String {
-    format!("{}{}{}.xml", super::domain(opts), BASE, key)
+    format!("{}{BASE}{key}.xml", super::domain(opts))
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -94,15 +94,17 @@ impl Record {
     pub async fn get(
         key: &str,
         resolve_crossref: bool,
+        expand_journal: bool,
         opts: &crate::cli::DblpServerArgs,
     ) -> Result<Self, Error> {
         let client = reqwest::Client::new();
-        Self::get_with_client(key, resolve_crossref, opts, &client).await
+        Self::get_with_client(key, resolve_crossref, expand_journal, opts, &client).await
     }
 
     pub async fn get_with_client(
         key: &str,
         resolve_crossref: bool,
+        expand_journal: bool,
         opts: &crate::cli::DblpServerArgs,
         client: &reqwest::Client,
     ) -> Result<Self, Error> {
@@ -122,16 +124,33 @@ impl Record {
                 volume,
                 journal,
                 ee,
-            } => Self::Article {
-                key: key.to_string(),
-                author,
-                title,
-                pages,
-                year,
-                volume,
-                journal,
-                external: ee.into_iter().map(External::from).collect(),
-            },
+            } => {
+                if expand_journal {
+                    let journal_key = key.split_once('/').unwrap().1.split_once('/').unwrap().0;
+                    let journal = super::stream::journal_title(journal_key, opts, client).await?;
+                    Self::Article {
+                        key: key.to_string(),
+                        author,
+                        title,
+                        pages,
+                        year,
+                        volume,
+                        journal,
+                        external: ee.into_iter().map(External::from).collect(),
+                    }
+                } else {
+                    Self::Article {
+                        key: key.to_string(),
+                        author,
+                        title,
+                        pages,
+                        year,
+                        volume,
+                        journal,
+                        external: ee.into_iter().map(External::from).collect(),
+                    }
+                }
+            }
             Data::Inproceedings {
                 author,
                 title,

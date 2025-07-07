@@ -1,5 +1,6 @@
 pub mod record;
 pub mod search;
+mod stream;
 
 pub use record::Record;
 

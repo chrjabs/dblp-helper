@@ -62,10 +62,16 @@ fn fixup(rec: &mut dblp::Record, args: &CommonGetArgs) {
 }
 
 async fn get(args: GetArgs, dblp: DblpServerArgs, color: Color) -> Result<()> {
-    let mut rec = dblp::Record::get(&args.key, !args.common.crossref, &dblp).await?;
+    let mut rec = dblp::Record::get(
+        &args.key,
+        !args.common.crossref,
+        !args.common.dont_expand_journals,
+        &dblp,
+    )
+    .await?;
     fixup(&mut rec, &args.common);
     let crossref = if let Some(key) = rec.crossref_key() {
-        let mut crossref = dblp::Record::get(key, !args.common.crossref, &dblp).await?;
+        let mut crossref = dblp::Record::get(key, !args.common.crossref, false, &dblp).await?;
         fixup(&mut crossref, &args.common);
         fixers::expand_booktitle(&mut rec, &crossref);
         Some(crossref)
@@ -99,7 +105,15 @@ async fn fetch_record(
     client: &reqwest::Client,
     opts: &cli::CommonGetArgs,
 ) -> Result<FetchRes, dblp::record::Error> {
-    let mut rec = match dblp::Record::get_with_client(key, !opts.crossref, dblp, client).await {
+    let mut rec = match dblp::Record::get_with_client(
+        key,
+        !opts.crossref,
+        !opts.dont_expand_journals,
+        dblp,
+        client,
+    )
+    .await
+    {
         Ok(rec) => rec,
         Err(err) => match err {
             dblp::record::Error::UnknownKey(key) => return Ok(FetchRes::Unknown(key)),

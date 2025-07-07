@@ -143,6 +143,9 @@ pub struct CommonGetArgs {
     /// Keep the all external fields (DOI and URL), rather than just one
     #[arg(long)]
     pub all_externals: bool,
+    /// Don't expand journal abbreviations
+    #[arg(long)]
+    pub dont_expand_journals: bool,
 }
 
 #[derive(clap::Args, Debug, Clone)]

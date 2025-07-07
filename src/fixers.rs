@@ -289,8 +289,15 @@ pub fn dashes(rec: &mut Record) {
     | Record::Book { title, .. }
     | Record::Incollection { title, .. }) = rec;
     *title = title.replace(" - ", "---");
-    if let Record::Inproceedings { booktitle, .. } | Record::Incollection { booktitle, .. } = rec {
-        *booktitle = booktitle.replace(" - ", "---");
+    if let Record::Article { journal: venue, .. }
+    | Record::Inproceedings {
+        booktitle: venue, ..
+    }
+    | Record::Incollection {
+        booktitle: venue, ..
+    } = rec
+    {
+        *venue = venue.replace(" - ", "---");
     }
 }
 
