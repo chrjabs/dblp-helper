@@ -12,9 +12,9 @@ fn query_url(key: &str, opts: &crate::cli::DblpServerArgs) -> String {
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("{0}")]
+    #[error("Reqwest HTTP framework error")]
     Reqwest(#[from] reqwest::Error),
-    #[error("{0}")]
+    #[error("XML parsing error")]
     Xml(#[from] quick_xml::de::DeError),
     #[error("HTTP status code: {0}")]
     Http(reqwest::StatusCode),

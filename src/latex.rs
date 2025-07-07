@@ -38,7 +38,6 @@ impl Iterator for CiteKeyIter {
             match aux_info {
                 AuxFileInfo::CiteKey(key) => return Some(Ok(key)),
                 AuxFileInfo::Input(path) => {
-                    dbg!(&path);
                     if !self.follow_inputs {
                         continue;
                     }
@@ -57,7 +56,6 @@ impl Iterator for CiteKeyIter {
                     };
                     let aux_iter = AuxFileIter::new(io::BufReader::new(aux_file));
                     self.aux_stack.push(aux_iter);
-                    dbg!(&self.aux_stack.len());
                 }
             }
         }

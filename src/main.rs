@@ -1,6 +1,6 @@
 use clap::Parser;
 use cli::{Color, CommonGetArgs, DblpServerArgs, GetAllArgs, GetArgs, SearchArgs};
-use color_eyre::eyre::{Result, bail};
+use color_eyre::eyre::{Result, WrapErr, bail};
 use dblp::Record;
 use futures::{StreamExt, TryStreamExt, stream};
 use owo_colors::OwoColorize;
@@ -157,7 +157,11 @@ async fn fetch_keys(
             if let Some(bar) = &bar {
                 bar.set_message(key.clone());
             }
-            let res = async move { fetch_record(key, dblp, client, &opts.common).await };
+            let res = async move {
+                fetch_record(key, dblp, client, &opts.common)
+                    .await
+                    .wrap_err_with(|| format!("Failed to fetch record `{key}`"))
+            };
             if let Some(bar) = &bar {
                 bar.inc(1);
             }
@@ -177,7 +181,6 @@ async fn get_all(mut args: GetAllArgs, dblp: DblpServerArgs, color: Color) -> Re
             res.as_ref().is_err() || res.as_ref().is_ok_and(|key| key.starts_with("DBLP:"))
         })
         .collect();
-    dbg!(&keys);
     let mut keys = keys?;
     keys.sort_unstable();
     keys.dedup();
