@@ -63,7 +63,7 @@ pub fn author_num(rec: &mut Record) {
     }
 }
 
-pub fn unicode(rec: &mut Record) {
+fn all_strings(rec: &mut Record, apply: impl Fn(&mut String)) {
     match rec {
         Record::Article {
             author,
@@ -72,10 +72,10 @@ pub fn unicode(rec: &mut Record) {
             ..
         } => {
             for author in author.iter_mut() {
-                unicode::replace(author);
+                apply(author);
             }
-            unicode::replace(title);
-            unicode::replace(journal);
+            apply(title);
+            apply(journal);
         }
         Record::Proceedings {
             editor,
@@ -85,14 +85,14 @@ pub fn unicode(rec: &mut Record) {
             ..
         } => {
             for editor in editor.iter_mut() {
-                unicode::replace(editor);
+                apply(editor);
             }
-            unicode::replace(title);
+            apply(title);
             if let Some(series) = series {
-                unicode::replace(series);
+                apply(series);
             }
             if let Some(publisher) = publisher {
-                unicode::replace(publisher);
+                apply(publisher);
             }
         }
         Record::Inproceedings {
@@ -103,10 +103,10 @@ pub fn unicode(rec: &mut Record) {
             ..
         } => {
             for author in author.iter_mut() {
-                unicode::replace(author);
+                apply(author);
             }
-            unicode::replace(title);
-            unicode::replace(booktitle);
+            apply(title);
+            apply(booktitle);
             if let Crossref::Resolved {
                 editor,
                 series,
@@ -115,13 +115,13 @@ pub fn unicode(rec: &mut Record) {
             } = crossref
             {
                 for editor in editor.iter_mut() {
-                    unicode::replace(editor);
+                    apply(editor);
                 }
                 if let Some(series) = series {
-                    unicode::replace(series);
+                    apply(series);
                 }
                 if let Some(publisher) = publisher {
-                    unicode::replace(publisher);
+                    apply(publisher);
                 }
             }
         }
@@ -133,10 +133,10 @@ pub fn unicode(rec: &mut Record) {
             ..
         } => {
             for author in author.iter_mut() {
-                unicode::replace(author);
+                apply(author);
             }
-            unicode::replace(title);
-            unicode::replace(booktitle);
+            apply(title);
+            apply(booktitle);
             if let Crossref::Resolved {
                 editor,
                 series,
@@ -145,13 +145,13 @@ pub fn unicode(rec: &mut Record) {
             } = crossref
             {
                 for editor in editor.iter_mut() {
-                    unicode::replace(editor);
+                    apply(editor);
                 }
                 if let Some(series) = series {
-                    unicode::replace(series);
+                    apply(series);
                 }
                 if let Some(publisher) = publisher {
-                    unicode::replace(publisher);
+                    apply(publisher);
                 }
             }
         }
@@ -164,20 +164,63 @@ pub fn unicode(rec: &mut Record) {
             ..
         } => {
             for author in author.iter_mut() {
-                unicode::replace(author);
+                apply(author);
             }
             for editor in editor.iter_mut() {
-                unicode::replace(editor);
+                apply(editor);
             }
-            unicode::replace(title);
+            apply(title);
             if let Some(series) = series {
-                unicode::replace(series);
+                apply(series);
             }
             if let Some(publisher) = publisher {
-                unicode::replace(publisher);
+                apply(publisher);
             }
         }
     }
+}
+
+fn escape_latex_chars(input: &mut String) {
+    let mut out: Option<String> = None;
+    for (idx, char) in input.chars().enumerate() {
+        let repl = match char {
+            '#' => Some(r"\#"),
+            '$' => Some(r"\$"),
+            '%' => Some(r"\%"),
+            '&' => Some(r"\&"),
+            '<' => Some(r"\ensuremath{<}"),
+            '>' => Some(r"\ensuremath{>}"),
+            '\\' => Some(r"\textbackslash{}"),
+            '^' => Some(r"\textasciicircum{}"),
+            '_' => Some(r"\_"),
+            '{' => Some(r"\{"),
+            '}' => Some(r"\}"),
+            '~' => Some(r"\textasciitilde{}"),
+            _ => None,
+        };
+        let Some(repl) = repl else {
+            if let Some(out) = out.as_mut() {
+                out.push(char);
+            }
+            continue;
+        };
+        if out.is_none() {
+            out = Some(String::from(&input[..idx]));
+        }
+        let out = out.as_mut().unwrap();
+        out.push_str(repl);
+    }
+    if let Some(out) = out {
+        let _ = std::mem::replace(input, out);
+    }
+}
+
+pub fn escape_latex(rec: &mut Record) {
+    all_strings(rec, escape_latex_chars)
+}
+
+pub fn unicode(rec: &mut Record) {
+    all_strings(rec, unicode::replace)
 }
 
 pub fn names(rec: &mut Record) {

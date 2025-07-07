@@ -46,6 +46,7 @@ async fn search(args: SearchArgs, dblp: DblpServerArgs, color: Color) -> Result<
 
 fn fixup(rec: &mut dblp::Record, args: &CommonGetArgs) {
     fixers::author_num(rec);
+    fixers::escape_latex(rec);
     fixers::page_range(rec);
     fixers::names(rec);
     fixers::acronyms(rec);

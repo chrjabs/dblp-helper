@@ -7,19 +7,6 @@ lazy_static! {
     /// https://github.com/phfaist/pylatexenc/blob/main/pylatexenc/latexencode/_uni2latexmap.py, where
     /// it was originally taken from latexcodec
     static ref UNICODE_2_LATEX: HashMap<char, &'static str> = HashMap::from_iter([
-        ('"', "''"),
-        ('#', r"\#"),
-        ('$', r"\$"),
-        ('%', r"\%"),
-        ('&', r"\&"),
-        ('<', r"\ensuremath{<}"),
-        ('>', r"\ensuremath{>}"),
-        ('\\', r"\textbackslash"),
-        ('^', r"\textasciicircum"),
-        ('_', r"\_"),
-        ('{', r"\{"),
-        ('}', r"\}"),
-        ('~', r"\textasciitilde"),
         ('\u{00A0}', r"~"), // NO-BREAK SPACE
         ('¡', r"\textexclamdown"),
         ('¢', r"\textcent"),
