@@ -2,8 +2,8 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 use crate::dblp::{
-    record::{Crossref, External},
     Record,
+    record::{Crossref, External},
 };
 
 mod names;
@@ -225,11 +225,10 @@ fn fix_acronyms(string: &mut String) {
             .next()
             .map(char::is_uppercase)
             .unwrap_or(false);
-        let n_upper =
-            matched
-                .as_str()
-                .chars()
-                .fold(0, |cnt, ch| if ch.is_uppercase() { cnt + 1 } else { cnt });
+        let n_upper = matched
+            .as_str()
+            .chars()
+            .fold(0, |cnt, ch| if ch.is_uppercase() { cnt + 1 } else { cnt });
         if n_upper > 1 || (!first_upper && n_upper > 0) {
             if changed.is_none() {
                 changed = Some(string.clone());
@@ -321,6 +320,30 @@ pub fn manually_correct(rec: &mut Record) {
             *title = String::from(
                 "Certifying Pareto Optimality in Multi-objective Maximum Satisfiability",
             );
+        }
+    }
+}
+
+/// Removes all but one external link
+///
+/// If a DOI is present, the first one is used, otherwise the first URL is used
+pub fn single_external(rec: &mut Record) {
+    match rec {
+        Record::Article { external, .. }
+        | Record::Proceedings { external, .. }
+        | Record::Inproceedings { external, .. }
+        | Record::Book { external, .. }
+        | Record::Incollection { external, .. } => {
+            let Some(mut chosen) = external.first().cloned() else {
+                return;
+            };
+            for ext in external.iter() {
+                if matches!(ext, External::Doi(_)) {
+                    chosen = ext.clone();
+                    break;
+                }
+            }
+            *external = vec![chosen];
         }
     }
 }

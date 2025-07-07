@@ -56,6 +56,9 @@ fn fixup(rec: &mut dblp::Record, args: &CommonGetArgs) {
     if !args.unicode {
         fixers::unicode(rec);
     }
+    if !args.all_externals {
+        fixers::single_external(rec);
+    }
 }
 
 async fn get(args: GetArgs, dblp: DblpServerArgs, color: Color) -> Result<()> {

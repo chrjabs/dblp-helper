@@ -140,6 +140,9 @@ pub struct CommonGetArgs {
     /// Whether to use crossref style citations for `incollections` and `inproceedings`
     #[arg(short, long)]
     pub crossref: bool,
+    /// Keep the all external fields (DOI and URL), rather than just one
+    #[arg(long)]
+    pub all_externals: bool,
 }
 
 #[derive(clap::Args, Debug, Clone)]
