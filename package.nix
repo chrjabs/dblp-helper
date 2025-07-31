@@ -3,33 +3,34 @@
   rustPlatform,
   openssl,
   pkg-config,
-}: let
+}:
+let
   manifest = (lib.importTOML ./Cargo.toml).package;
 in
-  rustPlatform.buildRustPackage {
-    pname = manifest.name;
-    version = manifest.version;
+rustPlatform.buildRustPackage {
+  pname = manifest.name;
+  version = manifest.version;
 
-    src = lib.fileset.toSource {
-      root = ./.;
-      fileset = lib.fileset.unions [
-        ./Cargo.lock
-        ./Cargo.toml
-        ./src
-      ];
-    };
-    cargoLock.lockFile = ./Cargo.lock;
+  src = lib.fileset.toSource {
+    root = ./.;
+    fileset = lib.fileset.unions [
+      ./Cargo.lock
+      ./Cargo.toml
+      ./src
+    ];
+  };
+  cargoLock.lockFile = ./Cargo.lock;
 
-    useNextest = true;
+  useNextest = true;
 
-    buildInputs = [openssl];
-    nativeBuildInputs = [pkg-config];
+  buildInputs = [ openssl ];
+  nativeBuildInputs = [ pkg-config ];
 
-    meta = with lib; {
-      description = manifest.description;
-      homepage = manifest.homepage;
-      license = licenses.mit;
-      platforms = platforms.all;
-      mainProgram = "dblp";
-    };
-  }
+  meta = with lib; {
+    description = manifest.description;
+    homepage = manifest.homepage;
+    license = licenses.mit;
+    platforms = platforms.all;
+    mainProgram = "dblp";
+  };
+}
