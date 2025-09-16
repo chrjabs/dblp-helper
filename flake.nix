@@ -35,16 +35,30 @@
             overlays =
               let
                 toolchain-overlay = _: super: {
-                  rust-toolchain = super.symlinkJoin {
-                    name = "rust-toolchain";
-                    paths = [
-                      ((pkgs.extend (import inputs.rust-overlay)).rust-bin.fromRustupToolchainFile ./rust-toolchain.toml)
-                    ];
-                    buildInputs = [ super.makeWrapper ];
-                    postBuild = ''
-                      wrapProgram $out/bin/cargo --set LIBCLANG_PATH ${super.libclang.lib}/lib
-                    '';
-                  };
+                  rust-toolchain =
+                    let
+                      rust-toolchain = (
+                        (pkgs.extend (import inputs.rust-overlay)).rust-bin.fromRustupToolchainFile ./rust-toolchain.toml
+                      );
+                    in
+                    super.symlinkJoin {
+                      name = "rust-toolchain";
+                      paths = [
+                        rust-toolchain
+                      ];
+                      buildInputs = [ super.makeWrapper ];
+                      postBuild = ''
+                        wrapProgram $out/bin/cargo --set LIBCLANG_PATH ${super.libclang.lib}/lib
+                      '';
+                      passthru = {
+                        inherit (rust-toolchain.passthru)
+                          availableComponents
+                          targetPlatforms
+                          tier1TargetPlatforms
+                          badTargetPlatforms
+                          ;
+                      };
+                    };
                 };
               in
               [
