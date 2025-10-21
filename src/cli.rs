@@ -65,6 +65,8 @@ pub struct Styles {
     pub info: Style,
     pub warn_head: Style,
     pub warn_body: Style,
+    pub open_access: Style,
+    pub closed_access: Style,
 }
 
 impl Styles {
@@ -85,6 +87,8 @@ impl Styles {
         self.info = Style::new().cyan().bold();
         self.warn_head = Style::new().yellow().bold();
         self.warn_body = Style::new().yellow();
+        self.open_access = Style::new().green().italic();
+        self.closed_access = Style::new().red().italic();
     }
 }
 

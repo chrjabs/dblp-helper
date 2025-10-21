@@ -68,7 +68,6 @@ struct CommonInfo {
     year: u32,
     access: Access,
     key: String,
-    ee: String,
 }
 
 #[derive(serde::Deserialize, Clone, Debug)]
@@ -82,7 +81,6 @@ enum Access {
 #[derive(serde::Deserialize, Clone, Debug)]
 struct CommonPaperInfo {
     venue: String,
-    pages: String,
     doi: String,
 }
 
@@ -119,6 +117,8 @@ enum Info {
     InformalAndOtherPublications {
         #[serde(flatten)]
         common: CommonInfo,
+        venue: String,
+        doi: String,
     },
     #[serde(rename = "Data and Artifacts")]
     DataAndArtifacts {
@@ -180,15 +180,37 @@ impl fmt::Display for HitDisplay<'_> {
                 paper: CommonPaperInfo { venue, .. },
                 ..
             }
-            | Info::PartsInBooksOrCollections { venue, .. } => {
+            | Info::PartsInBooksOrCollections { venue, .. }
+            | Info::InformalAndOtherPublications { venue, .. } => {
                 write!(f, "{}", venue.style(self.styles.venue))?;
                 write!(f, ", ")?;
             }
             _ => {}
         };
         writeln!(f, "({})", common.year.style(self.styles.year))?;
-        writeln!(f, "{}", common.ee.style(self.styles.url))?;
-        Ok(())
+        match &self.value.info {
+            Info::ConferenceAndWorkshopPapers {
+                paper: CommonPaperInfo { doi, .. },
+                ..
+            }
+            | Info::JournalArticles {
+                paper: CommonPaperInfo { doi, .. },
+                ..
+            }
+            | Info::PartsInBooksOrCollections { doi, .. }
+            | Info::InformalAndOtherPublications { doi, .. } => {
+                write!(
+                    f,
+                    "{} ",
+                    format!("https://doi.org/{doi}").style(self.styles.url)
+                )?;
+            }
+            _ => {}
+        };
+        match common.access {
+            Access::Open => writeln!(f, "[{}]", "open access".style(self.styles.open_access)),
+            Access::Closed => writeln!(f, "[{}]", "closed access".style(self.styles.closed_access)),
+        }
     }
 }
 
