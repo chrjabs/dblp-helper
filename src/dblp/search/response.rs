@@ -115,6 +115,16 @@ enum Info {
         venue: String,
         doi: String,
     },
+    #[serde(rename = "Informal and Other Publications")]
+    InformalAndOtherPublications {
+        #[serde(flatten)]
+        common: CommonInfo,
+    },
+    #[serde(rename = "Data and Artifacts")]
+    DataAndArtifacts {
+        #[serde(flatten)]
+        common: CommonInfo,
+    },
 }
 
 #[derive(serde::Deserialize, Clone, Debug)]
@@ -147,7 +157,9 @@ impl fmt::Display for HitDisplay<'_> {
             Info::BooksAndTheses { common }
             | Info::ConferenceAndWorkshopPapers { common, .. }
             | Info::JournalArticles { common, .. }
-            | Info::PartsInBooksOrCollections { common, .. } => common,
+            | Info::PartsInBooksOrCollections { common, .. }
+            | Info::InformalAndOtherPublications { common, .. }
+            | Info::DataAndArtifacts { common, .. } => common,
         };
         writeln!(f, "DBLP:{}", common.key.style(self.styles.citekey))?;
         writeln!(f, "{}", "----------".style(self.styles.separator))?;

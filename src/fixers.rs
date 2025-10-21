@@ -177,6 +177,20 @@ fn all_strings(rec: &mut Record, apply: impl Fn(&mut String)) {
                 apply(publisher);
             }
         }
+        Record::Misc {
+            author,
+            title,
+            publisher,
+            ..
+        } => {
+            for author in author.iter_mut() {
+                apply(author);
+            }
+            apply(title);
+            if let Some(publisher) = publisher {
+                apply(publisher);
+            }
+        }
     }
 }
 
@@ -293,7 +307,8 @@ pub fn acronyms(rec: &mut Record) {
     | Record::Proceedings { title, .. }
     | Record::Inproceedings { title, .. }
     | Record::Book { title, .. }
-    | Record::Incollection { title, .. }) = rec;
+    | Record::Incollection { title, .. }
+    | Record::Misc { title, .. }) = rec;
     fix_acronyms(title);
     if let Record::Inproceedings { booktitle, .. } | Record::Incollection { booktitle, .. } = rec {
         fix_acronyms(booktitle);
@@ -305,7 +320,8 @@ pub fn weird_urls(rec: &mut Record) {
     | Record::Proceedings { external, .. }
     | Record::Inproceedings { external, .. }
     | Record::Book { external, .. }
-    | Record::Incollection { external, .. }) = rec;
+    | Record::Incollection { external, .. }
+    | Record::Misc { external, .. }) = rec;
     external.retain(|ext| {
         !matches!(
             ext,
@@ -330,7 +346,8 @@ pub fn dashes(rec: &mut Record) {
     | Record::Proceedings { title, .. }
     | Record::Inproceedings { title, .. }
     | Record::Book { title, .. }
-    | Record::Incollection { title, .. }) = rec;
+    | Record::Incollection { title, .. }
+    | Record::Misc { title, .. }) = rec;
     *title = title.replace(" - ", "---");
     if let Record::Article { journal: venue, .. }
     | Record::Inproceedings {
@@ -383,7 +400,8 @@ pub fn single_external(rec: &mut Record) {
         | Record::Proceedings { external, .. }
         | Record::Inproceedings { external, .. }
         | Record::Book { external, .. }
-        | Record::Incollection { external, .. } => {
+        | Record::Incollection { external, .. }
+        | Record::Misc { external, .. } => {
             let Some(mut chosen) = external.first().cloned() else {
                 return;
             };

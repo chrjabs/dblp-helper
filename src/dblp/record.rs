@@ -77,6 +77,14 @@ pub enum Record {
         external: Vec<External>,
         crossref: Crossref,
     },
+    Misc {
+        key: String,
+        author: Vec<String>,
+        title: String,
+        year: u32,
+        publisher: Option<String>,
+        external: Vec<External>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -309,6 +317,20 @@ impl Record {
                 isbn,
                 external: ee.into_iter().map(External::from).collect(),
             },
+            Data::Data {
+                author,
+                title,
+                publisher,
+                year,
+                ee,
+            } => Self::Misc {
+                key: key.to_string(),
+                author,
+                title,
+                publisher,
+                year,
+                external: ee.into_iter().map(External::from).collect(),
+            },
         };
         Ok(rec)
     }
@@ -341,7 +363,8 @@ impl Record {
             | Record::Proceedings { key, .. }
             | Record::Inproceedings { key, .. }
             | Record::Book { key, .. }
-            | Record::Incollection { key, .. } => key,
+            | Record::Incollection { key, .. }
+            | Record::Misc { key, .. } => key,
         }
     }
 
@@ -351,7 +374,8 @@ impl Record {
             | Record::Proceedings { title, .. }
             | Record::Inproceedings { title, .. }
             | Record::Book { title, .. }
-            | Record::Incollection { title, .. } => title,
+            | Record::Incollection { title, .. }
+            | Record::Misc { title, .. } => title,
         }
     }
 }
@@ -656,6 +680,33 @@ impl fmt::Display for Bibtex<'_> {
                 }
                 bibtex_end(f)
             }
+            Record::Misc {
+                key,
+                author,
+                title,
+                year,
+                publisher,
+                external,
+            } => {
+                bibtex_start(f, "misc", key, &self.styles)?;
+                bibtex_people(f, "author", author, &self.styles)?;
+                bibtex_kv(f, "title", title, &self.styles)?;
+                if let Some(publisher) = publisher {
+                    bibtex_kv(f, "publisher", publisher, &self.styles)?;
+                }
+                bibtex_kv(f, "year", year, &self.styles)?;
+                for external in external {
+                    match external {
+                        External::Url(url) => {
+                            bibtex_kv(f, "url", url, &self.styles)?;
+                        }
+                        External::Doi(doi) => {
+                            bibtex_kv(f, "doi", doi, &self.styles)?;
+                        }
+                    }
+                }
+                bibtex_end(f)
+            }
         }
     }
 }
@@ -723,6 +774,15 @@ enum Data {
         volume: Option<String>,
         #[serde(default)]
         isbn: Vec<String>,
+        #[serde(default)]
+        ee: Vec<String>,
+    },
+    Data {
+        #[serde(default)]
+        author: Vec<String>,
+        title: String,
+        year: u32,
+        publisher: Option<String>,
         #[serde(default)]
         ee: Vec<String>,
     },
@@ -840,6 +900,26 @@ mod tests {
             <ee>https://doi.org/10.3233/FAIA336</ee>
             <url>db/series/faia/faia336.html</url>
             </book>
+            </dblp>
+        "#;
+        quick_xml::de::from_str::<super::XmlRecord>(data).unwrap();
+    }
+
+    #[test]
+    fn misc() {
+        let data = r#"
+            <?xml version="1.0" encoding="US-ASCII"?>
+            <dblp>
+            <data key="data/11/IserJ24" mdate="2025-01-15">
+            <author orcid="0000-0003-2904-232X">Markus Iser</author>
+            <author orcid="0000-0003-3532-696X">Christoph Jabs</author>
+            <title>Global Benchmark Database.</title>
+            <year>2024</year>
+            <month>November</month>
+            <ee type="oa">https://doi.org/10.4230/artifacts.22456</ee>
+            <publisher>DROPS Artifacts</publisher>
+            <stream>streams/repo/drops</stream>
+            </data>
             </dblp>
         "#;
         quick_xml::de::from_str::<super::XmlRecord>(data).unwrap();
