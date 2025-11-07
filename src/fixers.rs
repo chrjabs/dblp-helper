@@ -300,14 +300,21 @@ fn fix_acronyms(string: &mut String) {
                 )
             },
         );
+        let start = matched.start() + offset;
+        let mut end = matched.end() + offset;
+        // Special exceptions:
+        // - `anything-based` (e.g., SAT-based), the `-based` will not be included in the acronym
+        if matches!(
+            matched.as_str().rsplit_once('-'),
+            Some((_, "based")) | Some((_, "Based"))
+        ) {
+            end -= 6;
+        }
         if n_upper - n_upper_after_dash > 1 || (!first_upper && n_upper > 0) {
-            if changed.is_none() {
-                changed = Some(string.clone());
-            }
-            let changed = changed.as_mut().unwrap();
+            let changed = changed.get_or_insert_with(|| string.clone());
             // wrap in braces
-            changed.insert(matched.end() + offset, '}');
-            changed.insert(matched.start() + offset, '{');
+            changed.insert(end, '}');
+            changed.insert(start, '{');
             offset += 2;
         }
     }
@@ -446,9 +453,13 @@ mod tests {
         super::fix_acronyms(&mut text);
         assert_eq!(text, "With {SAT} and {MaxSAT} we have two acronyms");
 
+        let mut text = String::from("Some people write Max-SAT");
+        super::fix_acronyms(&mut text);
+        assert_eq!(text, "Some people write {Max-SAT}");
+
         let mut text = String::from("MaxSAT-based bi-objective optimization");
         super::fix_acronyms(&mut text);
-        assert_eq!(text, "{MaxSAT-based} bi-objective optimization");
+        assert_eq!(text, "{MaxSAT}-based bi-objective optimization");
 
         let mut text =
             String::from("Using Small MUSes to Explain How to Solve Pen and Paper Puzzles.");
@@ -465,5 +476,12 @@ mod tests {
         let mut text = String::from("big-M should be an acronym");
         super::fix_acronyms(&mut text);
         assert_eq!(text, "{big-M} should be an acronym");
+
+        let mut text = String::from("SAT-Based and MaxSAT-Based are special exceptions");
+        super::fix_acronyms(&mut text);
+        assert_eq!(
+            text,
+            "{SAT}-Based and {MaxSAT}-Based are special exceptions"
+        );
     }
 }
