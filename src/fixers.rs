@@ -410,6 +410,12 @@ pub fn manually_correct(rec: &mut Record) {
             );
         }
     }
+    // Smallcaps acronyms not properly in DBLP metadata
+    if rec.key() == "conf/sat/DaviesB13" {
+        if let Record::Inproceedings { title, .. } = rec {
+            *title = String::from("Exploiting the Power of {MIP} Solvers in {MAXSAT}");
+        }
+    }
 }
 
 /// Removes all but one external link
