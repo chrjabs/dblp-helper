@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::Regex;
 
@@ -12,7 +13,7 @@ mod unicode;
 lazy_static! {
     static ref RANGE_PATTERN: Regex = Regex::new(r"(\d)-(\d)").unwrap();
     static ref AUTHOR_NUM_PATTERN: Regex = Regex::new(r" \d\d\d\d$").unwrap();
-    static ref WORD_PATTERN: Regex = Regex::new(r"\w+").unwrap();
+    static ref WORD_PATTERN: Regex = Regex::new(r"[\w-]+").unwrap();
     static ref DATE_RANGE_PATTERN: Regex = Regex::new(r"(\d)-(\d)|(\d\s)-(\sJanuary|\sFebruary|\sMarch|\sApril|\sMay|\sJune|\sJuly|\sAugust|\sSeptember|\sOctober|\sNovember|\sDecember)").unwrap();
 }
 
@@ -274,7 +275,7 @@ fn fix_acronyms(string: &mut String) {
     let mut offset = 0;
     for matched in WORD_PATTERN.find_iter(string) {
         // Acronym cases:
-        // 1. has more than one upper case
+        // 1. has more than one upper case and not all of them are after a dash
         // 2. starts with lower case, but contains upper case
         let first_upper = matched
             .as_str()
@@ -282,11 +283,24 @@ fn fix_acronyms(string: &mut String) {
             .next()
             .map(char::is_uppercase)
             .unwrap_or(false);
-        let n_upper = matched
-            .as_str()
-            .chars()
-            .fold(0, |cnt, ch| if ch.is_uppercase() { cnt + 1 } else { cnt });
-        if n_upper > 1 || (!first_upper && n_upper > 0) {
+        let (n_upper, n_upper_after_dash) = matched.as_str().chars().tuple_windows().fold(
+            (if first_upper { 1 } else { 0 }, 0),
+            |(total, after_dash), (first, second)| {
+                (
+                    if second.is_uppercase() {
+                        total + 1
+                    } else {
+                        total
+                    },
+                    if first == '-' {
+                        after_dash + 1
+                    } else {
+                        after_dash
+                    },
+                )
+            },
+        );
+        if n_upper - n_upper_after_dash > 1 || (!first_upper && n_upper > 0) {
             if changed.is_none() {
                 changed = Some(string.clone());
             }
@@ -434,7 +448,7 @@ mod tests {
 
         let mut text = String::from("MaxSAT-based bi-objective optimization");
         super::fix_acronyms(&mut text);
-        assert_eq!(text, "{MaxSAT}-based bi-objective optimization");
+        assert_eq!(text, "{MaxSAT-based} bi-objective optimization");
 
         let mut text =
             String::from("Using Small MUSes to Explain How to Solve Pen and Paper Puzzles.");
@@ -443,5 +457,13 @@ mod tests {
             text,
             "Using Small {MUSes} to Explain How to Solve Pen and Paper Puzzles."
         );
+
+        let mut text = String::from("Thirty-First should not be an ancronym");
+        super::fix_acronyms(&mut text);
+        assert_eq!(text, "Thirty-First should not be an ancronym");
+
+        let mut text = String::from("big-M should be an acronym");
+        super::fix_acronyms(&mut text);
+        assert_eq!(text, "{big-M} should be an acronym");
     }
 }
