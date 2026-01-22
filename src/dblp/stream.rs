@@ -4,18 +4,32 @@
 
 use std::fmt;
 
+use tower::ServiceExt;
+
 use super::record::Error;
 
 const BASE: &str = "/streams/";
 
-pub async fn journal_title(
+pub async fn journal_title<Service>(
     key: &str,
     opts: &crate::cli::DblpServerArgs,
-    client: &reqwest::Client,
-) -> Result<String, Error> {
-    let response = client
-        .get(format!("{}{BASE}journals/{key}.xml", super::domain(opts)))
-        .send()
+    service: &mut Service,
+) -> Result<String, Error>
+where
+    Service: tower::Service<
+            reqwest::Request,
+            Response = reqwest::Response,
+            Error = Box<dyn std::error::Error + Send + std::marker::Sync + 'static>,
+        >,
+{
+    let response = service
+        .ready()
+        .await?
+        .call(reqwest::Request::new(
+            reqwest::Method::GET,
+            reqwest::Url::parse(&format!("{}{BASE}journals/{key}.xml", super::domain(opts)))
+                .expect("this is a valid URL"),
+        ))
         .await?;
     match response.status() {
         reqwest::StatusCode::NOT_FOUND => return Err(Error::UnknownKey(String::from(key))),

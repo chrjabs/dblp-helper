@@ -22,6 +22,12 @@ pub struct DblpServerArgs {
     /// Use a custom DBLP server
     #[arg(long, global = true, conflicts_with = "trier")]
     pub dblp_domain: Option<String>,
+    /// The maximum number of concurrent requests to DBLP to open
+    #[arg(short = 'j', long, global = true, default_value_t = 2)]
+    pub concurrent_requests: usize,
+    /// Rate limit: only send one request in this many milliseconds
+    #[arg(short = 'r', long, global = true, default_value_t = 4000)]
+    pub rate_limit: u64,
 }
 
 #[derive(clap::ValueEnum, Clone, Copy, Debug)]
@@ -169,9 +175,6 @@ pub struct GetAllArgs {
     pub path: camino::Utf8PathBuf,
     #[command(flatten)]
     pub common: CommonGetArgs,
-    /// The maximum number of concurrent requests to DBLP to open
-    #[arg(short = 'j', long, default_value_t = 8)]
-    pub concurrent_requests: usize,
     /// Don't follow `\@input` commands in the LaTeX aux file
     #[arg(short = 'f', long)]
     pub no_follow_inputs: bool,

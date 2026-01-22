@@ -1,13 +1,15 @@
 use std::fmt;
 
 use owo_colors::OwoColorize;
+use tower::ServiceExt;
 
 use crate::cli::Styles;
 
 const BASE: &str = "/rec/";
 
-fn query_url(key: &str, opts: &crate::cli::DblpServerArgs) -> String {
-    format!("{}{BASE}{key}.xml", super::domain(opts))
+fn query_url(key: &str, opts: &crate::cli::DblpServerArgs) -> reqwest::Url {
+    reqwest::Url::parse(&format!("{}{BASE}{key}.xml", super::domain(opts)))
+        .expect("should be a proper URL")
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -20,6 +22,8 @@ pub enum Error {
     Http(reqwest::StatusCode),
     #[error("DBLP key `{0}` is unknown")]
     UnknownKey(String),
+    #[error("Service error: {0}")]
+    Generic(#[from] Box<dyn std::error::Error + Send + std::marker::Sync + 'static>),
 }
 
 #[derive(Clone, Debug)]
@@ -105,19 +109,33 @@ impl Record {
         expand_journal: bool,
         opts: &crate::cli::DblpServerArgs,
     ) -> Result<Self, Error> {
-        let client = reqwest::Client::new();
-        Self::get_with_client(key, resolve_crossref, expand_journal, opts, &client).await
+        let mut service = super::new_service(opts);
+        Self::get_with_service(key, resolve_crossref, expand_journal, opts, &mut service).await
     }
 
-    pub async fn get_with_client(
+    pub async fn get_with_service<Service>(
         key: &str,
         resolve_crossref: bool,
         expand_journal: bool,
         opts: &crate::cli::DblpServerArgs,
-        client: &reqwest::Client,
-    ) -> Result<Self, Error> {
+        service: &mut Service,
+    ) -> Result<Self, Error>
+    where
+        Service: tower::Service<
+                reqwest::Request,
+                Response = reqwest::Response,
+                Error = Box<dyn std::error::Error + Send + std::marker::Sync + 'static>,
+            >,
+    {
         let key = key.strip_prefix("DBLP:").unwrap_or(key);
-        let response = client.get(query_url(key, opts)).send().await?;
+        let response = service
+            .ready()
+            .await?
+            .call(reqwest::Request::new(
+                reqwest::Method::GET,
+                query_url(key, opts),
+            ))
+            .await?;
         match response.status() {
             reqwest::StatusCode::NOT_FOUND => return Err(Error::UnknownKey(String::from(key))),
             code if !code.is_success() => return Err(Error::Http(code)),
@@ -135,7 +153,7 @@ impl Record {
             } => {
                 if expand_journal {
                     let journal_key = key.split_once('/').unwrap().1.split_once('/').unwrap().0;
-                    let journal = super::stream::journal_title(journal_key, opts, client).await?;
+                    let journal = super::stream::journal_title(journal_key, opts, service).await?;
                     Self::Article {
                         key: key.to_string(),
                         author,
@@ -170,7 +188,14 @@ impl Record {
                 ..
             } => {
                 if resolve_crossref {
-                    let response = client.get(query_url(&crossref, opts)).send().await?;
+                    let response = service
+                        .ready()
+                        .await?
+                        .call(reqwest::Request::new(
+                            reqwest::Method::GET,
+                            query_url(&crossref, opts),
+                        ))
+                        .await?;
                     match response.status() {
                         reqwest::StatusCode::NOT_FOUND => {
                             panic!("this really shouldn't happen, or DBLP's data is buggy")
@@ -228,7 +253,14 @@ impl Record {
                 ..
             } => {
                 if resolve_crossref {
-                    let response = client.get(query_url(&crossref, opts)).send().await?;
+                    let response = service
+                        .ready()
+                        .await?
+                        .call(reqwest::Request::new(
+                            reqwest::Method::GET,
+                            query_url(&crossref, opts),
+                        ))
+                        .await?;
                     match response.status() {
                         reqwest::StatusCode::NOT_FOUND => {
                             panic!("this really shouldn't happen, or DBLP's data is buggy")

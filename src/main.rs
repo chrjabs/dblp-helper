@@ -100,18 +100,25 @@ enum FetchRes {
     Unknown(String),
 }
 
-async fn fetch_record(
+async fn fetch_record<Service>(
     key: &str,
     dblp: &DblpServerArgs,
-    client: &reqwest::Client,
+    service: &mut Service,
     opts: &cli::CommonGetArgs,
-) -> Result<FetchRes, dblp::record::Error> {
-    let mut rec = match dblp::Record::get_with_client(
+) -> Result<FetchRes, dblp::record::Error>
+where
+    Service: tower::Service<
+            reqwest::Request,
+            Response = reqwest::Response,
+            Error = Box<dyn std::error::Error + Send + std::marker::Sync + 'static>,
+        >,
+{
+    let mut rec = match dblp::Record::get_with_service(
         key,
         !opts.crossref,
         !opts.dont_expand_journals,
         dblp,
-        client,
+        service,
     )
     .await
     {
@@ -125,13 +132,20 @@ async fn fetch_record(
     Ok(FetchRes::Rec(rec))
 }
 
-async fn fetch_keys(
+async fn fetch_keys<Service>(
     keys: &[String],
     dblp: &DblpServerArgs,
-    client: &reqwest::Client,
+    service: &mut Service,
     opts: &cli::GetAllArgs,
     color: Color,
-) -> Result<Vec<FetchRes>> {
+) -> Result<Vec<FetchRes>>
+where
+    Service: tower::Service<
+            reqwest::Request,
+            Response = reqwest::Response,
+            Error = Box<dyn std::error::Error + Send + std::marker::Sync + 'static>,
+        > + Clone,
+{
     // Setup progress information
     let err_styles = {
         let mut styles = cli::Styles::default();
@@ -153,13 +167,13 @@ async fn fetch_keys(
 
     let results: Vec<_> = stream::iter(keys)
         .map(|key| {
-            let client = &client;
+            let mut service = service.clone();
             let dblp = &dblp;
             if let Some(bar) = &bar {
                 bar.set_message(key.clone());
             }
             let res = async move {
-                fetch_record(key, dblp, client, &opts.common)
+                fetch_record(key, dblp, &mut service, &opts.common)
                     .await
                     .wrap_err_with(|| format!("Failed to fetch record `{key}`"))
             };
@@ -168,7 +182,7 @@ async fn fetch_keys(
             }
             res
         })
-        .buffered(opts.concurrent_requests)
+        .buffered(dblp.concurrent_requests)
         .try_collect()
         .await?;
 
@@ -186,9 +200,9 @@ async fn get_all(mut args: GetAllArgs, dblp: DblpServerArgs, color: Color) -> Re
     keys.sort_unstable();
     keys.dedup();
 
-    let client = reqwest::Client::new();
+    let mut service = dblp::new_service(&dblp);
 
-    let results = fetch_keys(&keys, &dblp, &client, &args, color).await?;
+    let results = fetch_keys(&keys, &dblp, &mut service, &args, color).await?;
 
     let mut unknown_keys = String::new();
     let mut crossref_keys = vec![];
@@ -228,7 +242,7 @@ async fn get_all(mut args: GetAllArgs, dblp: DblpServerArgs, color: Color) -> Re
         true
     });
 
-    let results = fetch_keys(&crossref_keys, &dblp, &client, &args, color).await?;
+    let results = fetch_keys(&crossref_keys, &dblp, &mut service, &args, color).await?;
 
     crossref_recs.extend(results.into_iter().filter_map(|res| match res {
         FetchRes::Rec(record) => Some(record),
