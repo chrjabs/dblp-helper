@@ -63,7 +63,7 @@ pub fn parse(content: &str) -> Result<Vec<Record>, Error> {
                 let Ok(editors) = entry.editors() else {
                     return Err(Error::MissingField(String::from("editor"), entry.key));
                 };
-                let editor = editors.into_iter().next().unwrap().0;
+                let editor = editors.into_iter().next().map(|(p, _)| p).unwrap_or(vec![]);
                 let Ok(date) = entry.date() else {
                     return Err(Error::MissingField(String::from("year"), entry.key));
                 };
@@ -127,7 +127,7 @@ pub fn parse(content: &str) -> Result<Vec<Record>, Error> {
                         let Ok(editors) = entry.editors() else {
                             return Err(Error::MissingField(String::from("editor"), entry.key));
                         };
-                        let editor = editors.into_iter().next().unwrap().0;
+                        let editor = editors.into_iter().next().map(|(p, _)| p).unwrap_or(vec![]);
                         let publisher = entry.publisher().ok().map(format_publisher);
                         let series = entry
                             .series()
@@ -164,7 +164,7 @@ pub fn parse(content: &str) -> Result<Vec<Record>, Error> {
                 let Ok(editors) = entry.editors() else {
                     return Err(Error::MissingField(String::from("editor"), entry.key));
                 };
-                let editor = editors.into_iter().next().unwrap().0;
+                let editor = editors.into_iter().next().map(|(p, _)| p).unwrap_or(vec![]);
                 let publisher = entry.publisher().ok().map(format_publisher);
                 let Ok(date) = entry.date() else {
                     return Err(Error::MissingField(String::from("year"), entry.key));
@@ -225,7 +225,7 @@ pub fn parse(content: &str) -> Result<Vec<Record>, Error> {
                         let Ok(editors) = entry.editors() else {
                             return Err(Error::MissingField(String::from("editor"), entry.key));
                         };
-                        let editor = editors.into_iter().next().unwrap().0;
+                        let editor = editors.into_iter().next().map(|(p, _)| p).unwrap_or(vec![]);
                         let publisher = entry.publisher().ok().map(format_publisher);
                         let series = entry
                             .series()
