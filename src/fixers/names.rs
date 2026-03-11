@@ -6,11 +6,11 @@ pub fn fix(name: &mut String) {
 
     // Case 1: if any but the first token starts with lower case, likely `van ...`, `de la ...`
     for (idx, token) in tokens.iter().enumerate().skip(1) {
-        if let Some(first) = token.chars().next() {
-            if first.is_lowercase() {
-                convert(name, &tokens, idx);
-                return;
-            }
+        if let Some(first) = token.chars().next()
+            && first.is_lowercase()
+        {
+            convert(name, &tokens, idx);
+            return;
         }
     }
 

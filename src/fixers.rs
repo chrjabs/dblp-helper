@@ -235,7 +235,21 @@ pub fn escape_latex(rec: &mut Record) {
 }
 
 pub fn unicode(rec: &mut Record) {
-    all_strings(rec, unicode::replace)
+    all_strings(rec, unicode::replace);
+    match rec {
+        Record::Article {
+            pages: Some(pages), ..
+        }
+        | Record::Inproceedings {
+            pages: Some(pages), ..
+        }
+        | Record::Incollection {
+            pages: Some(pages), ..
+        } => {
+            *pages = pages.replace('–', "--");
+        }
+        _ => (),
+    }
 }
 
 pub fn names(rec: &mut Record) {
@@ -357,7 +371,7 @@ pub fn date_ranges(rec: &mut Record) {
         title: booktitle, ..
     } = rec
     {
-        let rep = DATE_RANGE_PATTERN.replace(booktitle, "${1}${3}--${2}${4}");
+        let rep = DATE_RANGE_PATTERN.replace(booktitle, "${1}${3}{\\textendash}${2}${4}");
         *booktitle = rep.to_string();
     }
 }
@@ -369,7 +383,7 @@ pub fn dashes(rec: &mut Record) {
     | Record::Book { title, .. }
     | Record::Incollection { title, .. }
     | Record::Misc { title, .. }) = rec;
-    *title = title.replace(" - ", "---");
+    *title = title.replace(" - ", "{\\textemdash}");
     if let Record::Article { journal: venue, .. }
     | Record::Inproceedings {
         booktitle: venue, ..
@@ -378,7 +392,22 @@ pub fn dashes(rec: &mut Record) {
         booktitle: venue, ..
     } = rec
     {
-        *venue = venue.replace(" - ", "---");
+        *venue = venue.replace(" - ", "{\\textemdash}");
+    }
+    if let Record::Proceedings {
+        publisher: Some(publisher),
+        ..
+    }
+    | Record::Book {
+        publisher: Some(publisher),
+        ..
+    }
+    | Record::Misc {
+        publisher: Some(publisher),
+        ..
+    } = rec
+    {
+        *publisher = publisher.replace(" - ", "{\\textemdash}");
     }
 }
 
@@ -403,18 +432,52 @@ pub fn expand_booktitle(rec: &mut Record, crossref: &Record) {
 /// Manual fixer for mistakes in DBLP data
 pub fn manually_correct(rec: &mut Record) {
     // Mistake introduced in the metadata in the final editing process
-    if rec.key() == "conf/tacas/JabsBBJ25" {
-        if let Record::Inproceedings { title, .. } = rec {
-            *title = String::from(
-                "Certifying Pareto Optimality in Multi-objective Maximum Satisfiability",
-            );
-        }
+    if rec.key() == "conf/tacas/JabsBBJ25"
+        && let Record::Inproceedings { title, .. } = rec
+    {
+        *title =
+            String::from("Certifying Pareto Optimality in Multi-objective Maximum Satisfiability");
     }
     // Smallcaps acronyms not properly in DBLP metadata
-    if rec.key() == "conf/sat/DaviesB13" {
-        if let Record::Inproceedings { title, .. } = rec {
-            *title = String::from("Exploiting the Power of {MIP} Solvers in {MAXSAT}");
-        }
+    if rec.key() == "conf/sat/DaviesB13"
+        && let Record::Inproceedings { title, .. } = rec
+    {
+        *title = String::from("Exploiting the Power of {MIP} Solvers in {MAXSAT}");
+    }
+    // Incorrect year for JELIA proceedings
+    if rec.key().starts_with("conf/jelia/2025")
+        && let Record::Proceedings { year, .. } = rec
+    {
+        *year = 2025;
+    }
+    // Custom entries used in thesis
+    if rec.key() == "conf/cp/JabsBIJ23"
+        && let Record::Inproceedings { usera, .. } = rec
+    {
+        *usera = Some(String::from(
+            "Proceedings of International Conference on Principles and Practice of Constraint Programming, {CP} 2023",
+        ));
+    }
+    if rec.key() == "conf/cpaior/JabsBJ24"
+        && let Record::Inproceedings { usera, .. } = rec
+    {
+        *usera = Some(String::from(
+            "Proceedings of Integration of Constraint Programming, Artificial Intelligence, and Operations Research, {CPAIOR} 2024",
+        ));
+    }
+    if rec.key() == "conf/tacas/JabsBBJ25"
+        && let Record::Inproceedings { usera, .. } = rec
+    {
+        *usera = Some(String::from(
+            "Proceedings of Tools and Algorithms for the Construction and Analysis of Systems, {TACAS} 2025",
+        ));
+    }
+    if rec.key() == "conf/jelia/JabsBJ25"
+        && let Record::Inproceedings { usera, .. } = rec
+    {
+        *usera = Some(String::from(
+            "Logics in Artificial Intelligence, {JELIA} 2025",
+        ));
     }
 }
 

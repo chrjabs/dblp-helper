@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use clap::Parser;
 use cli::{Color, CommonGetArgs, DblpServerArgs, GetAllArgs, GetArgs, SearchArgs};
 use color_eyre::eyre::{Result, WrapErr, bail};
@@ -5,6 +7,7 @@ use dblp::Record;
 use futures::{StreamExt, TryStreamExt, stream};
 use owo_colors::OwoColorize;
 
+mod bibtex;
 mod cli;
 mod dblp;
 mod fixers;
@@ -190,15 +193,42 @@ where
 }
 
 async fn get_all(mut args: GetAllArgs, dblp: DblpServerArgs, color: Color) -> Result<()> {
-    args.path.set_extension("aux");
-    let keys: Result<Vec<_>, _> = latex::CiteKeyIter::new(&args.path, !args.no_follow_inputs)?
-        .filter(|res| {
-            res.as_ref().is_err() || res.as_ref().is_ok_and(|key| key.starts_with("DBLP:"))
-        })
-        .collect();
+    args.latex_path.set_extension("aux");
+    let keys: Result<Vec<_>, _> =
+        latex::CiteKeyIter::new(&args.latex_path, !args.no_follow_inputs)?
+            .filter(|res| {
+                res.as_ref().is_err() || res.as_ref().is_ok_and(|key| key.starts_with("DBLP:"))
+            })
+            .collect();
     let mut keys = keys?;
     keys.sort_unstable();
     keys.dedup();
+
+    let mut records = if !args.dont_reuse_existing
+        && let Some(bibtex_path) = &args.bibtex_path
+    {
+        let content = std::fs::read_to_string(bibtex_path)?;
+        bibtex::parse(&content)?
+    } else {
+        vec![]
+    };
+    records.sort_unstable_by(|a, b| a.key().cmp(b.key()));
+    for rec in &mut records {
+        fixup(rec, &args.common);
+    }
+
+    // Remove keys that are already present
+    let mut idx = 0;
+    keys.retain(|key| {
+        let key = key.strip_prefix("DBLP:").unwrap_or(key);
+        while idx < records.len() && *records[idx].key() < *key {
+            idx += 1;
+        }
+        if idx < records.len() && *records[idx].key() == *key {
+            return false;
+        }
+        true
+    });
 
     let mut service = dblp::new_service(&dblp);
 
@@ -207,22 +237,25 @@ async fn get_all(mut args: GetAllArgs, dblp: DblpServerArgs, color: Color) -> Re
     let mut unknown_keys = String::new();
     let mut crossref_keys = vec![];
 
-    let mut records: Vec<_> = results
-        .into_iter()
-        .filter_map(|res| match res {
-            FetchRes::Rec(rec) => {
-                if let Some(key) = rec.crossref_key() {
-                    crossref_keys.push(key.to_owned());
-                }
-                Some(rec)
+    for rec in &records {
+        if let Some(key) = rec.crossref_key() {
+            crossref_keys.push(key.to_owned());
+        }
+    }
+
+    records.extend(results.into_iter().filter_map(|res| match res {
+        FetchRes::Rec(rec) => {
+            if let Some(key) = rec.crossref_key() {
+                crossref_keys.push(key.to_owned());
             }
-            FetchRes::Unknown(key) => {
-                unknown_keys.push_str("\n- ");
-                unknown_keys.push_str(&key);
-                None
-            }
-        })
-        .collect();
+            Some(rec)
+        }
+        FetchRes::Unknown(key) => {
+            unknown_keys.push_str("\n- ");
+            unknown_keys.push_str(&key);
+            None
+        }
+    }));
 
     crossref_keys.sort_unstable();
     crossref_keys.dedup();
@@ -261,22 +294,33 @@ async fn get_all(mut args: GetAllArgs, dblp: DblpServerArgs, color: Color) -> Re
             if let Some(key) = rec.crossref_key() {
                 // TODO: can probably do something more efficient here
                 let Ok(idx) = crossref_recs.binary_search_by_key(&key, Record::key) else {
-                    bail!("crossref key not found");
+                    bail!("crossref key not found: {key}");
                 };
                 fixers::expand_booktitle(rec, &crossref_recs[idx]);
             }
         }
     }
 
-    for (idx, rec) in records.into_iter().chain(crossref_recs).enumerate() {
-        if idx > 0 {
-            println!();
+    if let Some(bibtex_path) = &args.bibtex_path {
+        let mut writer = std::fs::File::create(bibtex_path)?;
+        for (idx, rec) in records.into_iter().chain(crossref_recs).enumerate() {
+            if idx > 0 {
+                writeln!(writer)?;
+            }
+            let bibtex = rec.bibtex();
+            writeln!(writer, "{bibtex}")?;
         }
-        let mut bibtex = rec.bibtex();
-        if color.should_color(&std::io::stdout()) {
-            bibtex.colorize();
+    } else {
+        for (idx, rec) in records.into_iter().chain(crossref_recs).enumerate() {
+            if idx > 0 {
+                println!();
+            }
+            let mut bibtex = rec.bibtex();
+            if color.should_color(&std::io::stdout()) {
+                bibtex.colorize();
+            }
+            println!("{bibtex}");
         }
-        println!("{bibtex}");
     }
 
     if !unknown_keys.is_empty() {

@@ -58,6 +58,7 @@ pub enum Record {
         pages: Option<String>,
         external: Vec<External>,
         crossref: Crossref,
+        usera: Option<String>,
     },
     Book {
         key: String,
@@ -228,6 +229,7 @@ impl Record {
                             series,
                             volume,
                         },
+                        usera: None,
                     }
                 } else {
                     Self::Inproceedings {
@@ -239,6 +241,7 @@ impl Record {
                         pages,
                         external: ee.into_iter().map(External::from).collect(),
                         crossref: Crossref::Key(crossref),
+                        usera: None,
                     }
                 }
             }
@@ -576,6 +579,7 @@ impl fmt::Display for Bibtex<'_> {
                 year,
                 external,
                 crossref,
+                usera,
             } => {
                 bibtex_start(f, "inproceedings", key, &self.styles)?;
                 bibtex_people(f, "author", author, &self.styles)?;
@@ -616,6 +620,9 @@ impl fmt::Display for Bibtex<'_> {
                             bibtex_kv(f, "publisher", publisher, &self.styles)?;
                         }
                     }
+                }
+                if let Some(usera) = usera {
+                    bibtex_kv(f, "usera", usera, &self.styles)?;
                 }
                 bibtex_end(f)
             }

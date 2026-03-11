@@ -172,12 +172,20 @@ pub struct GetAllArgs {
     ///
     /// The tool will read the `.aux` file. Assuming your main file is called `main.tex`, this can
     /// point to `main.tex`, `main.aux` or `main`.
-    pub path: camino::Utf8PathBuf,
+    pub latex_path: camino::Utf8PathBuf,
+    /// The optional BibTeX file to write the output to
+    ///
+    /// The tool will read the `.aux` file. Assuming your main file is called `main.tex`, this can
+    /// point to `main.tex`, `main.aux` or `main`.
+    pub bibtex_path: Option<camino::Utf8PathBuf>,
     #[command(flatten)]
     pub common: CommonGetArgs,
     /// Don't follow `\@input` commands in the LaTeX aux file
     #[arg(short = 'f', long)]
     pub no_follow_inputs: bool,
+    /// Don't reuse existing entries in BibTeX file
+    #[arg(short = 'C', long)]
+    pub dont_reuse_existing: bool,
 }
 
 #[cfg(test)]

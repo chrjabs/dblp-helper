@@ -63,6 +63,9 @@ impl fmt::Display for Title {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut first = true;
         for part in &self.title {
+            if part.trim().is_empty() {
+                continue;
+            }
             if !first {
                 write!(f, " ")?;
             }
