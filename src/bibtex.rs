@@ -60,9 +60,7 @@ pub fn parse(content: &str) -> Result<Vec<Record>, Error> {
                 })
             }
             biblatex::EntryType::Proceedings => {
-                let Ok(editors) = entry.editors() else {
-                    return Err(Error::MissingField(String::from("editor"), entry.key));
-                };
+                let editors = entry.editors().unwrap_or(vec![]);
                 let editor = editors.into_iter().next().map(|(p, _)| p).unwrap_or(vec![]);
                 let Ok(date) = entry.date() else {
                     return Err(Error::MissingField(String::from("year"), entry.key));
@@ -158,12 +156,8 @@ pub fn parse(content: &str) -> Result<Vec<Record>, Error> {
                 })
             }
             biblatex::EntryType::Book => {
-                let Ok(author) = entry.author() else {
-                    return Err(Error::MissingField(String::from("author"), entry.key));
-                };
-                let Ok(editors) = entry.editors() else {
-                    return Err(Error::MissingField(String::from("editor"), entry.key));
-                };
+                let author = entry.author().unwrap_or(vec![]);
+                let editors = entry.editors().unwrap_or(vec![]);
                 let editor = editors.into_iter().next().map(|(p, _)| p).unwrap_or(vec![]);
                 let publisher = entry.publisher().ok().map(format_publisher);
                 let Ok(date) = entry.date() else {
@@ -220,11 +214,13 @@ pub fn parse(content: &str) -> Result<Vec<Record>, Error> {
                     external.push(External::Url(url));
                 }
                 let crossref = match entry.get("crossref") {
-                    Some(crossref) => Crossref::Key(String::from_chunks(crossref).unwrap()),
+                    Some(crossref) => {
+                        let key = String::from_chunks(crossref).unwrap();
+                        let key = key.strip_prefix("DBLP:").unwrap_or(&key);
+                        Crossref::Key(String::from(key))
+                    }
                     None => {
-                        let Ok(editors) = entry.editors() else {
-                            return Err(Error::MissingField(String::from("editor"), entry.key));
-                        };
+                        let editors = entry.editors().unwrap_or(vec![]);
                         let editor = editors.into_iter().next().map(|(p, _)| p).unwrap_or(vec![]);
                         let publisher = entry.publisher().ok().map(format_publisher);
                         let series = entry
