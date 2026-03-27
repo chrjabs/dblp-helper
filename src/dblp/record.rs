@@ -142,7 +142,16 @@ impl Record {
             code if !code.is_success() => return Err(Error::Http(code)),
             _ => {}
         }
-        let rec = match quick_xml::de::from_str::<XmlRecord>(&response.text().await?)?.value {
+
+        // Strip HTML tags that trip the XML parser
+        // This list might need to be extended as we run into more of these
+        let response = response
+            .text()
+            .await?
+            .replace("<i>", "")
+            .replace("</i>", "");
+
+        let rec = match quick_xml::de::from_str::<XmlRecord>(&response)?.value {
             Data::Article {
                 author,
                 title,
