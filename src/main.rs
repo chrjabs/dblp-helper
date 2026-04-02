@@ -52,6 +52,9 @@ fn fixup(rec: &mut dblp::Record, args: &CommonGetArgs) {
     fixers::escape_latex(rec);
     fixers::page_range(rec);
     fixers::names(rec);
+    fixers::strip_title_period(rec);
+    fixers::capital_after_colon(rec);
+    fixers::proper_nouns(rec);
     fixers::acronyms(rec);
     fixers::weird_urls(rec);
     fixers::date_ranges(rec);

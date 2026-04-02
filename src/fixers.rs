@@ -13,8 +13,10 @@ mod unicode;
 lazy_static! {
     static ref RANGE_PATTERN: Regex = Regex::new(r"(\d)-(\d)").unwrap();
     static ref AUTHOR_NUM_PATTERN: Regex = Regex::new(r" \d\d\d\d$").unwrap();
-    static ref WORD_PATTERN: Regex = Regex::new(r"[\w-]+").unwrap();
+    static ref HYPHENATED_WORD_PATTERN: Regex = Regex::new(r"[\w\d-]+").unwrap();
     static ref DATE_RANGE_PATTERN: Regex = Regex::new(r"(\d)-(\d)|(\d\s)-(\sJanuary|\sFebruary|\sMarch|\sApril|\sMay|\sJune|\sJuly|\sAugust|\sSeptember|\sOctober|\sNovember|\sDecember)").unwrap();
+    static ref PROPER_NOUNS_PATTERN: Regex = Regex::new(r"(Bool(ean)?|Pareto|Slide\\\&Drill|Seesaw)").unwrap();
+    static ref CAPITAL_AFTER_COLON: Regex = Regex::new(r":\s+[A-Z]").unwrap();
 }
 
 pub fn page_range(rec: &mut Record) {
@@ -283,11 +285,41 @@ pub fn names(rec: &mut Record) {
     }
 }
 
+fn fix_proper_nouns(string: &mut String) {
+    let mut changed = None;
+    let mut offset = 0;
+    for matched in PROPER_NOUNS_PATTERN.find_iter(string) {
+        let start = matched.start() + offset;
+        let end = matched.end() + offset;
+        let changed = changed.get_or_insert_with(|| string.clone());
+        // wrap in braces
+        changed.insert(end, '}');
+        changed.insert(start, '{');
+        offset += 2;
+    }
+    if let Some(changed) = changed {
+        *string = changed;
+    }
+}
+
+pub fn proper_nouns(rec: &mut Record) {
+    let (Record::Article { title, .. }
+    | Record::Proceedings { title, .. }
+    | Record::Inproceedings { title, .. }
+    | Record::Book { title, .. }
+    | Record::Incollection { title, .. }
+    | Record::Misc { title, .. }) = rec;
+    fix_proper_nouns(title);
+    if let Record::Inproceedings { booktitle, .. } | Record::Incollection { booktitle, .. } = rec {
+        fix_proper_nouns(booktitle);
+    }
+}
+
 /// Wraps acronyms such as `SAT` of `MaxSAT` in curly braces
 fn fix_acronyms(string: &mut String) {
     let mut changed = None;
     let mut offset = 0;
-    for matched in WORD_PATTERN.find_iter(string) {
+    for matched in HYPHENATED_WORD_PATTERN.find_iter(string) {
         // Acronym cases:
         // 1. has more than one upper case and not all of them are after a dash
         // 2. starts with lower case, but contains upper case
@@ -347,6 +379,56 @@ pub fn acronyms(rec: &mut Record) {
     fix_acronyms(title);
     if let Record::Inproceedings { booktitle, .. } | Record::Incollection { booktitle, .. } = rec {
         fix_acronyms(booktitle);
+    }
+}
+
+fn fix_capital_after_colon(string: &mut String) {
+    let mut changed = None;
+    let mut offset = 0;
+    for matched in CAPITAL_AFTER_COLON.find_iter(string) {
+        let start = matched.end() + offset - 1;
+        let end = matched.end() + offset;
+        let changed = changed.get_or_insert_with(|| string.clone());
+        // wrap in braces
+        changed.insert(end, '}');
+        changed.insert(start, '{');
+        offset += 2;
+    }
+    if let Some(changed) = changed {
+        *string = changed;
+    }
+}
+
+pub fn capital_after_colon(rec: &mut Record) {
+    let (Record::Article { title, .. }
+    | Record::Proceedings { title, .. }
+    | Record::Inproceedings { title, .. }
+    | Record::Book { title, .. }
+    | Record::Incollection { title, .. }
+    | Record::Misc { title, .. }) = rec;
+    fix_capital_after_colon(title);
+    if let Record::Inproceedings { booktitle, .. } | Record::Incollection { booktitle, .. } = rec {
+        fix_capital_after_colon(booktitle);
+    }
+}
+
+fn fix_title_period(string: &mut String) {
+    let trimmed = string.trim_end();
+    if let Some(stripped) = trimmed.strip_suffix('.') {
+        *string = stripped.to_string();
+    }
+}
+
+pub fn strip_title_period(rec: &mut Record) {
+    let (Record::Article { title, .. }
+    | Record::Proceedings { title, .. }
+    | Record::Inproceedings { title, .. }
+    | Record::Book { title, .. }
+    | Record::Incollection { title, .. }
+    | Record::Misc { title, .. }) = rec;
+    fix_title_period(title);
+    if let Record::Inproceedings { booktitle, .. } | Record::Incollection { booktitle, .. } = rec {
+        fix_title_period(booktitle);
     }
 }
 
@@ -479,6 +561,11 @@ pub fn manually_correct(rec: &mut Record) {
             "Logics in Artificial Intelligence, {JELIA} 2025",
         ));
     }
+    if rec.key() == "conf/ijcai/ArgelichLS09"
+        && let Record::Inproceedings { title, .. } = rec
+    {
+        *title = title.replace("Problemse", "Problems");
+    }
 }
 
 /// Removes all but one external link
@@ -552,5 +639,39 @@ mod tests {
             text,
             "{SAT}-Based and {MaxSAT}-Based are special exceptions"
         );
+
+        let mut text = String::from("The Sat4j library, release 2.2.");
+        super::fix_acronyms(&mut text);
+        assert_eq!(text, "The {Sat4j} library, release 2.2.");
+    }
+
+    #[test]
+    fn proper_nouns() {
+        let mut text = String::from("Translating Pseudo-Boolean Constraints into SAT");
+        super::fix_proper_nouns(&mut text);
+        assert_eq!(text, "Translating Pseudo-{Boolean} Constraints into SAT");
+
+        let mut text =
+            String::from("A Support-Based Algorithm for the Bi-Objective Pareto Constraint");
+        super::fix_proper_nouns(&mut text);
+        assert_eq!(
+            text,
+            "A Support-Based Algorithm for the Bi-Objective {Pareto} Constraint"
+        );
+    }
+
+    #[test]
+    fn capital_after_colon() {
+        let mut text =
+            String::from("The Seesaw Algorithm: Function Optimization Using Implicit Hitting Sets");
+        super::fix_capital_after_colon(&mut text);
+        assert_eq!(
+            text,
+            "The Seesaw Algorithm: {F}unction Optimization Using Implicit Hitting Sets"
+        );
+
+        let mut text = String::from("Non: capitalized");
+        super::fix_capital_after_colon(&mut text);
+        assert_eq!(text, "Non: capitalized");
     }
 }
