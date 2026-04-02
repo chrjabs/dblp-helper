@@ -323,26 +323,20 @@ fn fix_acronyms(string: &mut String) {
         // Acronym cases:
         // 1. has more than one upper case and not all of them are after a dash
         // 2. starts with lower case, but contains upper case
+        // 3. contains an upper case letter and a numeric digit
         let first_upper = matched
             .as_str()
             .chars()
             .next()
             .map(char::is_uppercase)
             .unwrap_or(false);
-        let (n_upper, n_upper_after_dash) = matched.as_str().chars().tuple_windows().fold(
-            (if first_upper { 1 } else { 0 }, 0),
-            |(total, after_dash), (first, second)| {
+        let (n_upper, n_upper_after_dash, n_nums) = matched.as_str().chars().tuple_windows().fold(
+            (if first_upper { 1 } else { 0 }, 0, 0),
+            |(total, after_dash, nums), (first, second)| {
                 (
-                    if second.is_uppercase() {
-                        total + 1
-                    } else {
-                        total
-                    },
-                    if first == '-' {
-                        after_dash + 1
-                    } else {
-                        after_dash
-                    },
+                    total + u32::from(second.is_uppercase()),
+                    after_dash + u32::from(first == '-' && second.is_uppercase()),
+                    nums + u32::from(second.is_ascii_digit()),
                 )
             },
         );
@@ -356,7 +350,10 @@ fn fix_acronyms(string: &mut String) {
         ) {
             end -= 6;
         }
-        if n_upper - n_upper_after_dash > 1 || (!first_upper && n_upper > 0) {
+        if n_upper - n_upper_after_dash > 1
+            || (n_upper > 0 && n_nums > 0)
+            || (!first_upper && n_upper > 0)
+        {
             let changed = changed.get_or_insert_with(|| string.clone());
             // wrap in braces
             changed.insert(end, '}');
@@ -643,6 +640,10 @@ mod tests {
         let mut text = String::from("The Sat4j library, release 2.2.");
         super::fix_acronyms(&mut text);
         assert_eq!(text, "The {Sat4j} library, release 2.2.");
+
+        let mut text = String::from("A number is not an acronym 2024");
+        super::fix_acronyms(&mut text);
+        assert_eq!(text, "A number is not an acronym 2024");
     }
 
     #[test]

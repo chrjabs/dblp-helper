@@ -348,7 +348,7 @@ mod tests {
 
         let orig = r#"@article{DBLP:journals/jair/JabsBNJ24,
   author       = {Jabs, Christoph and Berg, Jeremias and Niskanen, Andreas and J{\"a}rvisalo, Matti},
-  title        = {From Single-Objective to Bi-Objective Maximum Satisfiability Solving.},
+  title        = {From Single-Objective to Bi-Objective Maximum Satisfiability Solving},
   journal      = {Journal of Artificial Intelligence Research},
   year         = {2024},
   pages        = {1223--1269},
@@ -375,7 +375,7 @@ mod tests {
 
         let orig = r#"@inproceedings{DBLP:conf/cp/JabsBIJ23,
   author       = {Jabs, Christoph and Berg, Jeremias and Ihalainen, Hannes and J{\"a}rvisalo, Matti},
-  title        = {Preprocessing in {SAT}-Based Multi-Objective Combinatorial Optimization.},
+  title        = {Preprocessing in {SAT}-Based Multi-Objective Combinatorial Optimization},
   booktitle    = {29th International Conference on Principles and Practice of Constraint Programming, {CP} 2023, Toronto, Canada, August 27{\textendash}31, 2023},
   year         = {2023},
   pages        = {18:1--18:20},
@@ -392,7 +392,7 @@ mod tests {
 
         let orig = r#"@inproceedings{DBLP:conf/jelia/JabsBJ25,
   author       = {Jabs, Christoph and Berg, Jeremias and J{\"a}rvisalo, Matti},
-  title        = {Engineering and Evaluating Multi-objective Pseudo-Boolean Optimizers.},
+  title        = {Engineering and Evaluating Multi-objective Pseudo-{Boolean} Optimizers},
   booktitle    = {Logics in Artificial Intelligence{\textemdash}19th European Conference, {JELIA} 2025, Kutaisi, Georgia, September 1{\textendash}4, 2025, Proceedings, Part I},
   year         = {2025},
   pages        = {115--134},
